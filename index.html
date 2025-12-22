@@ -335,6 +335,31 @@
         .bundle-success-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .bundle-success-actions .btn { flex: 1; min-width: 150px; }
         
+               .league-banner {
+            margin: 12px 0;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, rgba(201, 162, 39, 0.12), rgba(74, 124, 89, 0.15));
+            border: 1px solid rgba(201, 162, 39, 0.35);
+            border-radius: 14px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .league-banner:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.45); }
+        .league-banner-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+            font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 1rem; letter-spacing: 1px;
+        }
+        .league-banner-quote { color: var(--text-secondary); font-style: italic; font-size: 0.85rem; margin-bottom: 10px; }
+        .league-banner-body { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .league-banner-opponent {
+            font-weight: 700; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;
+        }
+        .league-badge { padding: 4px 8px; border-radius: 10px; background: rgba(0,0,0,0.25); font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.08); }
+        .league-banner-ranks { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; color: var(--text-secondary); }
+        .league-banner-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+        .league-banner-actions .btn { width: 100%; max-width: 220px; }
+        
         @keyframes blunder-pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.1); }
@@ -591,6 +616,23 @@
             
             <div class="menu-buttons">
                 <button class="btn btn-primary" id="btn-new-game">♟ Nova Partida</button>
+                <div class="league-banner" id="league-banner" style="display:none;">
+                    <div class="league-banner-header">
+                        <span>🏅 Proper partit de lliga</span>
+                        <span class="league-badge" id="league-banner-opp-rank">#—</span>
+                    </div>
+                    <div class="league-banner-quote" id="league-banner-quote">Preparat per brillar?</div>
+                    <div class="league-banner-body">
+                        <div class="league-banner-opponent">vs <span id="league-banner-opponent">—</span> · ELO <span id="league-banner-elo">—</span></div>
+                        <div class="league-banner-ranks">
+                            <span class="league-badge">Tu: <span id="league-banner-my-rank">#—</span></span>
+                            <span class="league-badge">Si guanyes: <span id="league-banner-projected">#—</span></span>
+                        </div>
+                    </div>
+                    <div class="league-banner-actions">
+                        <button class="btn btn-primary" id="btn-league-banner-play" style="margin-top:8px;">🎯 Jugar ara</button>
+                    </div>
+                </div>
                 <button class="btn btn-secondary" id="btn-league" style="background: linear-gradient(135deg, #8d6e63 0%, #5d4037 100%); color: #f4e4bc;">🏆 Lliga</button>
                 <button class="btn btn-secondary" id="btn-catalan" style="background: linear-gradient(135deg, #bf6e4e 0%, #a05030 100%); color: white;">🐉 Obertura Catalana</button>
                 <button class="btn btn-secondary" id="btn-drills" style="background: linear-gradient(135deg, #7c8568 0%, #555e42 100%); color: #f4e4bc;">🎓 Entrenament de Finals</button>
