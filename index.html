@@ -59,6 +59,30 @@
         }
         
         #app-container { position: relative; z-index: 1; max-width: 480px; width: 100%; }
+        body.device-tablet #app-container { max-width: 760px; }
+        body.device-desktop #app-container { max-width: 1100px; }
+
+        body.device-mobile { padding: 0; align-items: flex-start; }
+        body.device-mobile #app-container { max-width: 100vw; width: 100vw; }
+        body.device-mobile #game-screen { padding: 0 0 10px; }
+        body.device-mobile .header,
+        body.device-mobile .precision-panel,
+        body.device-mobile .controls { margin-left: 8px; margin-right: 8px; border-radius: 12px; }
+        body.device-mobile .header { padding: 10px; margin-top: 8px; margin-bottom: 8px; }
+        body.device-mobile .header-title { font-size: 1.05rem; margin-bottom: 6px; }
+        body.device-mobile .game-info { font-size: 0.78rem; gap: 6px; }
+        body.device-mobile .precision-panel { padding: 10px; gap: 10px; margin-bottom: 8px; }
+        body.device-mobile .precision-stat { min-width: 56px; }
+        body.device-mobile .precision-value { font-size: 1.15rem; }
+        body.device-mobile .board-container { margin: 0; }
+        body.device-mobile #myBoard { width: 100vw; max-width: 100vw; }
+        body.device-mobile .controls { padding: 10px; margin-top: 8px; }
+        body.device-mobile .status-message { font-size: 0.9rem; margin-bottom: 10px; }
+        body.device-mobile .game-buttons .btn { padding: 12px 8px; font-size: 0.82rem; }
+        body.device-mobile table.league-table { min-width: 470px; }
+        body.device-mobile .league-table thead th, body.device-mobile .league-table tbody td { padding: 8px 6px; }
+        body.device-mobile .league-table thead th { font-size: 0.74rem; }
+        body.device-mobile .league-table tbody td { font-size: 0.86rem; }
         
         #start-screen, #stats-screen {
             background: var(--bg-card);
@@ -182,6 +206,13 @@
         .btn-primary { background: linear-gradient(135deg, var(--accent-gold) 0%, #a68522 100%); color: var(--bg-dark); }
         .btn-secondary { background: linear-gradient(135deg, var(--accent-green) 0%, #3a6347 100%); color: var(--accent-cream); }
         .btn-blue { background: linear-gradient(135deg, var(--accent-blue) 0%, #0d47a1 100%); color: white; }
+        
+        body.device-tablet .menu-buttons,
+        body.device-desktop .menu-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
         
         .btn-hint {
             background: linear-gradient(135deg, #7b1fa2, #4a148c);
@@ -570,15 +601,15 @@
         }
 
         @media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
-            body { padding: 0; align-items: flex-start; }
-            #app-container { max-width: 100vw; width: 100vw; }
-            #game-screen { padding: 0 0 8px; }
-            .header, .precision-panel, .controls { margin-left: 8px; margin-right: 8px; }
-            .header { padding: 8px 10px; margin-top: 6px; margin-bottom: 6px; }
-            .precision-panel { padding: 8px 10px; gap: 10px; margin-bottom: 6px; }
-            .controls { padding: 8px 10px; margin-top: 6px; }
-            .board-container { margin: 0; }
-            #myBoard { width: 100vw; max-width: 100vw; }
+            body.device-mobile { padding: 0; align-items: flex-start; }
+            body.device-mobile #app-container { max-width: 100vw; width: 100vw; }
+            body.device-mobile #game-screen { padding: 0 0 8px; }
+            body.device-mobile .header, body.device-mobile .precision-panel, body.device-mobile .controls { margin-left: 8px; margin-right: 8px; }
+            body.device-mobile .header { padding: 8px 10px; margin-top: 6px; margin-bottom: 6px; }
+            body.device-mobile .precision-panel { padding: 8px 10px; gap: 10px; margin-bottom: 6px; }
+            body.device-mobile .controls { padding: 8px 10px; margin-top: 6px; }
+            body.device-mobile .board-container { margin: 0; }
+            body.device-mobile #myBoard { width: 100vw; max-width: 100vw; }
         }
 
         /* Controls del tauler (tocar / arrossegar) */
