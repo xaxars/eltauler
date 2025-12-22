@@ -227,6 +227,19 @@ function clearTapSelection() {
     $('.square-55d63').removeClass('tap-selected tap-move');
 }
 
+function clearEngineMoveHighlights() {
+    $('#myBoard .square-55d63').removeClass('engine-move');
+}
+
+function highlightEngineMove(from, to) {
+    clearEngineMoveHighlights();
+    [from, to].forEach((sq) => {
+        if (sq) {
+            $(`#myBoard .square-55d63[data-square='${sq}']`).addClass('engine-move');
+        }
+    });
+}
+
 function highlightTapSelection(square) {
     $('.square-55d63').removeClass('tap-selected tap-move');
     const sel = $(`#myBoard .square-55d63[data-square='${square}']`);
@@ -246,6 +259,7 @@ function commitHumanMoveFromTap(from, to) {
     const prevFen = game.fen();
     const move = game.move({ from: from, to: to, promotion: 'q' });
     if (move === null) return false;
+    clearEngineMoveHighlights();
     lastHumanMoveUci = move.from + move.to + (move.promotion ? move.promotion : '');
 
     lastPosition = prevFen;
@@ -1169,6 +1183,7 @@ function setupEvents() {
         $('#blunder-alert').hide();
 
         $('.square-55d63').removeClass('highlight-hint tap-selected tap-move');
+        clearEngineMoveHighlights();
         clearTapSelection();
 
         if (blunderMode && currentBundleFen) {
@@ -1428,6 +1443,7 @@ function startGame(isBundle, fen = null) {
     }
     
     $('.square-55d63').removeClass('highlight-hint');
+    clearEngineMoveHighlights();
     updateStatus();
     
     if (playerColor !== game.turn() && stockfish) {
@@ -1453,6 +1469,7 @@ function onDrop(source, target) {
     lastPosition = game.fen(); 
     var move = game.move({ from: source, to: target, promotion: 'q' });
     if (move === null) return 'snapback';
+    clearEngineMoveHighlights();
     lastHumanMoveUci = move.from + move.to + (move.promotion ? move.promotion : '');
     
     totalPlayerMoves++; 
@@ -1619,13 +1636,17 @@ function handleEngineMessage(msg) {
     if (msg.indexOf('bestmove') !== -1 && isEngineThinking) {
         const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
         if (match) {
+            const fromSq = match[1];
+            const toSq = match[2];
             setTimeout(() => {
                 isEngineThinking = false;
                 if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
                     goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay();
                 }
-                game.move({ from: match[1], to: match[2], promotion: match[3] || 'q' });
-                board.position(game.fen()); updateStatus();
+                game.move({ from: fromSq, to: toSq, promotion: match[3] || 'q' });
+                board.position(game.fen());
+                highlightEngineMove(fromSq, toSq);
+                updateStatus();
                 if (game.game_over()) handleGameOver();
             }, 900);
         }
@@ -1642,6 +1663,7 @@ function resetBundleToStartPosition() {
     waitingForBlunderAnalysis = false;
     isEngineThinking = false;
     $('.square-55d63').removeClass('highlight-hint tap-selected tap-move');
+    clearEngineMoveHighlights();
     clearTapSelection();
     $('#blunder-alert').hide();
     $('#status').text("Tornar a intentar");
