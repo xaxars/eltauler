@@ -20,9 +20,9 @@ let recentGames = [];
 let aiDifficulty = 8; 
 const ADAPTIVE_LEVEL_KEY = 'chess_adaptiveLevel';
 const ADAPTIVE_CONFIG = {
-    MIN_LEVEL: 400,
+    MIN_LEVEL: 200,
     MAX_LEVEL: 3000,
-    DEFAULT_LEVEL: 1200,
+    DEFAULT_LEVEL: 200,
     PRECISION_HIGH: 85,
     PRECISION_MID: 70,
     PRECISION_LOW: 45,
@@ -38,6 +38,7 @@ let consecutiveWins = 0;
 let consecutiveLosses = 0;
 let isEngineThinking = false;
 let engineMoveCandidates = [];
+let lastReviewSnapshot = null;
 
 let lastPosition = null; 
 let blunderMode = false;
@@ -1448,6 +1449,17 @@ function setupEvents() {
 
     $('#btn-back-stats').click(() => { $('#stats-screen').hide(); $('#start-screen').show(); });
 
+    $('#result-indicator').off('click').on('click', () => {
+        if (!lastReviewSnapshot) return;
+        showPostGameReview(
+            lastReviewSnapshot.msg,
+            lastReviewSnapshot.finalPrecision,
+            lastReviewSnapshot.counts,
+            null,
+            { showCheckmate: lastReviewSnapshot.showCheckmate }
+        );
+    });
+
     $('#control-mode-select').off('change').on('change', function() {
         const mode = $(this).val();
         const shouldRebuild = $('#game-screen').is(':visible');
@@ -1802,6 +1814,10 @@ function promptMatchErrorNext() {
 
 function startGame(isBundle, fen = null) {
     currentReview = [];
+    lastReviewSnapshot = null;
+    setResultIndicator(null);
+    const checkmateImage = $('#checkmate-image');
+    if (checkmateImage.length) checkmateImage.hide();
         if (!isBundle) {
         currentGameErrors = [];
         matchErrorQueue = [];
@@ -2181,13 +2197,24 @@ function renderReviewBreakdown(counts) {
     });
 }
 
-function showPostGameReview(msg, finalPrecision, counts, onClose) {
+function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) {
     const modal = $('#review-modal');
     if (!modal.length) {
         alert(msg + (finalPrecision ? `\nPrecisió: ${finalPrecision}%` : ''));
         if (typeof onClose === 'function') onClose();
         return;
     }
+    
+    // Mostrar/ocultar imatge de checkmate
+    const checkmateImage = $('#checkmate-image');
+    if (checkmateImage.length) {
+        if (options.showCheckmate) {
+            checkmateImage.show();
+        } else {
+            checkmateImage.hide();
+        }
+    }
+    
     $('#review-result-text').text(msg);
     $('#review-precision-value').text(finalPrecision ? `${finalPrecision}%` : '—');
     renderReviewBreakdown(counts || summarizeReview(currentReview));
@@ -2375,12 +2402,57 @@ function handleGameOver(manualResign = false) {
     persistReviewSummary(finalPrecision, msg);
     recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
     $('#status').text(msg);
+    
+    // Gestió de l'indicador de resultat
+    if (leagueOutcome === 'win') setResultIndicator('win');
+    else if (leagueOutcome === 'loss') setResultIndicator('loss');
+    else setResultIndicator('draw');
+    
+    // Mostrar imatge de checkmate si és escac mat i victòria
+    const showCheckmate = game.in_checkmate() && playerWon;
+    if (showCheckmate) {
+        const checkmateImage = $('#checkmate-image');
+        if (checkmateImage.length) checkmateImage.show();
+    }
+    
     let reviewHeader = msg;
     if (currentStreak > 0) reviewHeader += ` · Ratxa ${currentStreak} dies`;
+    
+    // Guardar snapshot per poder reobrir la revisió
+    lastReviewSnapshot = {
+        msg: reviewHeader,
+        finalPrecision: finalPrecision,
+        counts: reviewCounts,
+        showCheckmate: showCheckmate
+    };
+    
     const onClose = () => {
         if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
     };
-    showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose);
+    showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
+}
+
+function setResultIndicator(outcome) {
+    const indicator = $('#result-indicator');
+    const icon = $('#result-indicator-icon');
+    
+    if (!outcome) {
+        indicator.hide();
+        return;
+    }
+    
+    indicator.removeClass('win loss draw').show();
+    
+    if (outcome === 'win') {
+        indicator.addClass('win');
+        icon.text('🏆');
+    } else if (outcome === 'loss') {
+        indicator.addClass('loss');
+        icon.text('💔');
+    } else {
+        indicator.addClass('draw');
+        icon.text('🤝');
+    }
 }
 
 function updateStatus() {
