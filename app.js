@@ -4,8 +4,8 @@
 let game = null;
 let board = null;
 let stockfish = null;
-let userELO = 100; 
-let engineELO = 100;
+let userELO = 50; 
+let engineELO = 50;
 let savedErrors = [];
 let currentReview = [];
 let reviewHistory = [];
@@ -528,7 +528,7 @@ function createNewLeague(force = false) {
     const bots = [];
     for (let i = 0; i < 9; i++) {
         const name = baseNames[i] || `Rival${i + 1}`;
-        const elo = Math.max(100, userELO + randInt(-25, 25));
+        const elo = Math.max(50, userELO + randInt(-25, 25));
         bots.push({ id: `bot${i + 1}`, name: name, elo: elo, pj: 0, pg: 0, pp: 0, pe: 0, pts: 0 });
     }
 
@@ -1175,9 +1175,10 @@ function updateEloHistory(newElo) {
 }
 
 function updateDisplay() {
+    engineELO = Math.max(50, userELO);
     $('#current-elo').text(userELO); $('#game-elo').text(userELO);
     $('#current-stars').text(totalStars); $('#game-stars').text(totalStars);
-    $('#engine-elo').text('Adaptativa');
+    $('#engine-elo').text(`${engineELO} (adaptativa)`);
     
     let total = savedErrors.length;
     $('#bundle-info').text(total > 0 ? `${total} errors guardats` : 'Cap error desat');
@@ -1399,7 +1400,7 @@ function setupEvents() {
             localStorage.clear();
             saveEpaperPreference(epaperEnabled);
             applyControlMode(getDefaultControlMode(), { save: true, rebuild: false });
-            userELO = 100; savedErrors = []; currentStreak = 0; lastPracticeDate = null;
+            userELO = 50; savedErrors = []; currentStreak = 0; lastPracticeDate = null;
             todayCompleted = false; totalStars = 0; todayMissions = []; missionsDate = null; unlockedBadges = [];
             sessionStats = { 
                 gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
@@ -1467,8 +1468,8 @@ function setupEvents() {
         reader.onload = (ev) => {
             try {
                 const data = JSON.parse(ev.target.result);
-                if (confirm(`Importar dades? ELO: ${data.elo || 200}, Estrelles: ${data.totalStars || 0}`)) {
-                    userELO = data.elo || 200; savedErrors = data.bundles || [];
+                if (confirm(`Importar dades? ELO: ${data.elo || 50}, Estrelles: ${data.totalStars || 0}`)) {
+                    userELO = data.elo || 50; savedErrors = data.bundles || [];
                     currentStreak = data.streak || 0; lastPracticeDate = data.lastPracticeDate || null;
                     totalStars = data.totalStars || 0; unlockedBadges = data.unlockedBadges || [];
                     todayMissions = restoreMissions(data.todayMissions || []); missionsDate = data.missionsDate || null;
@@ -2278,7 +2279,7 @@ function handleGameOver(manualResign = false) {
 
     if (blunderMode && playerWon && currentBundleFen) { handleBundleSuccess(); return; }
     
-    userELO = Math.max(100, userELO + change); 
+    userELO = Math.max(50, userELO + change); 
     updateEloHistory(userELO);
     
     if (!blunderMode && currentGameMode !== 'drill') adjustAIDifficulty(playerWon, finalPrecision);
