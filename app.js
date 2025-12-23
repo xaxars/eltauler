@@ -24,6 +24,7 @@ const ADAPTIVE_CONFIG = {
     MIN_LEVEL: 50,
     MAX_LEVEL: 3000,
     DEFAULT_LEVEL: 50,
+    CALIBRATION_MOVES: 12,
     PRECISION_HIGH: 85,
     PRECISION_MID: 70,
     PRECISION_LOW: 45,
@@ -37,6 +38,9 @@ const ADAPTIVE_CONFIG = {
 let adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
 let consecutiveWins = 0;
 let consecutiveLosses = 0;
+let isCalibrationPhase = true;
+let calibrationMoves = 0;
+let calibrationGoodMoves = 0;
 let isEngineThinking = false;
 let engineMoveCandidates = [];
 let lastReviewSnapshot = null;
@@ -1026,6 +1030,28 @@ function getAdaptiveNormalized() {
     return Math.max(0, Math.min(1, (adaptiveLevel - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
 }
 
+function precisionToAdaptiveLevel(precision) {
+    const normalized = Math.max(0, Math.min(1, (precision || 0) / 100));
+    return Math.round(ADAPTIVE_CONFIG.MIN_LEVEL + normalized * (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL));
+}
+
+function finalizeCalibration() {
+    const avgPrecision = calibrationMoves > 0 ? Math.round((calibrationGoodMoves / calibrationMoves) * 100) : 50;
+    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(avgPrecision));
+    aiDifficulty = levelToDifficulty(adaptiveLevel);
+    isCalibrationPhase = false;
+    saveStorage();
+}
+
+function registerCalibrationMove(isGood) {
+    if (!isCalibrationPhase || blunderMode || currentGameMode === 'drill') return;
+    if (calibrationMoves >= ADAPTIVE_CONFIG.CALIBRATION_MOVES) return;
+    calibrationMoves += 1;
+    if (isGood) calibrationGoodMoves += 1;
+    if (calibrationMoves >= ADAPTIVE_CONFIG.CALIBRATION_MOVES) finalizeCalibration();
+    else saveStorage();
+}
+
 function adjustAIDifficulty(playerWon, precision, resultScore = null) {
     const normalizedScore = (typeof resultScore === 'number') ? resultScore : (playerWon ? 1 : 0);
     const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
@@ -1036,6 +1062,11 @@ function adjustAIDifficulty(playerWon, precision, resultScore = null) {
     if (normalizedScore === 1) { consecutiveWins++; consecutiveLosses = 0; } 
     else if (normalizedScore === 0) { consecutiveLosses++; consecutiveWins = 0; }
     else { consecutiveWins = 0; consecutiveLosses = 0; }
+
+    if (isCalibrationPhase) {
+        saveStorage();
+        return;
+    }
     
     const recentWindow = recentGames.slice(-8);
     const avgScore = recentWindow.length > 0 ? recentWindow.reduce((sum, g) => {
@@ -1210,6 +1241,9 @@ function loadStorage() {
     const rGames = localStorage.getItem('chess_recentGames'); if (rGames) recentGames = JSON.parse(rGames);
     const cWins = localStorage.getItem('chess_consecutiveWins'); if (cWins) consecutiveWins = parseInt(cWins);
     const cLosses = localStorage.getItem('chess_consecutiveLosses'); if (cLosses) consecutiveLosses = parseInt(cLosses);
+    const calPhase = localStorage.getItem('chess_isCalibrationPhase'); if (calPhase !== null) isCalibrationPhase = (calPhase === 'true');
+    const calMoves = localStorage.getItem('chess_calibrationMoves'); if (calMoves) calibrationMoves = parseInt(calMoves);
+    const calGood = localStorage.getItem('chess_calibrationGoodMoves'); if (calGood) calibrationGoodMoves = parseInt(calGood);
     const league = localStorage.getItem('chess_currentLeague'); if (league) currentLeague = JSON.parse(league);
     const lMatch = localStorage.getItem('chess_leagueActiveMatch'); if (lMatch) leagueActiveMatch = JSON.parse(lMatch);
     const reviews = localStorage.getItem('chess_reviewHistory'); if (reviews) reviewHistory = JSON.parse(reviews);
@@ -1234,6 +1268,9 @@ function saveStorage() {
     localStorage.setItem('chess_recentGames', JSON.stringify(recentGames));
     localStorage.setItem('chess_consecutiveWins', consecutiveWins);
     localStorage.setItem('chess_consecutiveLosses', consecutiveLosses);
+    localStorage.setItem('chess_isCalibrationPhase', String(isCalibrationPhase));
+    localStorage.setItem('chess_calibrationMoves', calibrationMoves);
+    localStorage.setItem('chess_calibrationGoodMoves', calibrationGoodMoves);
     localStorage.setItem('chess_reviewHistory', JSON.stringify(reviewHistory));
     if (currentLeague) localStorage.setItem('chess_currentLeague', JSON.stringify(currentLeague)); else localStorage.removeItem('chess_currentLeague');
     if (leagueActiveMatch) localStorage.setItem('chess_leagueActiveMatch', JSON.stringify(leagueActiveMatch)); else localStorage.removeItem('chess_leagueActiveMatch');
@@ -1988,7 +2025,7 @@ function makeEngineMove() {
                     isEngineThinking = false;
                     
                     if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
-                        goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay();
+                        goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay();
                     }
                     updateStatus();
                     if (game.game_over()) handleGameOver();
@@ -2062,7 +2099,7 @@ function handleEngineMessage(msg) {
             const ok = accepted.length > 0 ? accepted.includes(played) : false;
 
             if (ok) {
-                if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+                if (pendingMoveEvaluation) { goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay(); }
                 handleBundleSuccess();
             } else {
                 if (pendingMoveEvaluation) {
@@ -2107,7 +2144,7 @@ function handleEngineMessage(msg) {
                 $('#blunder-alert').removeClass('alert-low alert-med alert-high')
                     .addClass('alert-' + severity).show();
 
-                if (pendingMoveEvaluation) { pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+                if (pendingMoveEvaluation) { registerCalibrationMove(false); pendingMoveEvaluation = false; updatePrecisionDisplay(); }
                 saveBlunderToBundle(lastPosition, severity);
 
                 engineMoveTimeout = setTimeout(() => {
@@ -2136,7 +2173,7 @@ function handleEngineMessage(msg) {
             setTimeout(() => {
                 isEngineThinking = false;
                 if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
-                    goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay();
+                    goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay();
                 }
                 game.move({ from: fromSq, to: toSq, promotion: promotion });
                 board.position(game.fen());
