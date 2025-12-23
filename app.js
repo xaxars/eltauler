@@ -14,15 +14,16 @@ let currentGameErrors = [];
 let matchErrorQueue = [];
 let currentMatchError = null;
 let isMatchErrorReviewSession = false;
+let reviewAutoCloseTimer = null;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
 let aiDifficulty = 8; 
 const ADAPTIVE_LEVEL_KEY = 'chess_adaptiveLevel';
 const ADAPTIVE_CONFIG = {
-    MIN_LEVEL: 200,
+    MIN_LEVEL: 50,
     MAX_LEVEL: 3000,
-    DEFAULT_LEVEL: 200,
+    DEFAULT_LEVEL: 50,
     PRECISION_HIGH: 85,
     PRECISION_MID: 70,
     PRECISION_LOW: 45,
@@ -2220,7 +2221,19 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
     renderReviewBreakdown(counts || summarizeReview(currentReview));
     modal.css('display', 'flex');
 
-        const hasMatchErrors = currentGameErrors.length > 0;
+    if (reviewAutoCloseTimer) {
+        clearTimeout(reviewAutoCloseTimer);
+        reviewAutoCloseTimer = null;
+    }
+
+    if (options.showCheckmate) {
+        reviewAutoCloseTimer = setTimeout(() => {
+            modal.hide();
+            if (typeof onClose === 'function') onClose();
+        }, 3000);
+    }
+
+    const hasMatchErrors = currentGameErrors.length > 0;
     const reviewErrorsBtn = $('#btn-review-errors');
     if (reviewErrorsBtn.length) {
         reviewErrorsBtn.toggle(hasMatchErrors);
@@ -2231,10 +2244,18 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
     }
 
     $('#btn-review-close').off('click').on('click', () => {
+         if (reviewAutoCloseTimer) {
+            clearTimeout(reviewAutoCloseTimer);
+            reviewAutoCloseTimer = null;
+        }
         modal.hide();
         if (typeof onClose === 'function') onClose();
     });
     $('#btn-review-stats').off('click').on('click', () => {
+        if (reviewAutoCloseTimer) {
+            clearTimeout(reviewAutoCloseTimer);
+            reviewAutoCloseTimer = null;
+        }        
         modal.hide();
         $('#start-screen').hide(); $('#league-screen').hide(); $('#game-screen').hide(); $('#stats-screen').show();
         updateStatsDisplay();
