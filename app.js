@@ -4,8 +4,8 @@
 let game = null;
 let board = null;
 let stockfish = null;
-let userELO = 300; 
-let engineELO = 300;
+let userELO = 200; 
+let engineELO = 200;
 let savedErrors = [];
 let currentReview = [];
 let reviewHistory = [];
@@ -527,7 +527,7 @@ function createNewLeague(force = false) {
     const bots = [];
     for (let i = 0; i < 9; i++) {
         const name = baseNames[i] || `Rival${i + 1}`;
-        const elo = Math.max(100, userELO + randInt(-120, 120));
+        const elo = Math.max(100, userELO + randInt(-25, 25));
         bots.push({ id: `bot${i + 1}`, name: name, elo: elo, pj: 0, pg: 0, pp: 0, pe: 0, pts: 0 });
     }
 
@@ -1331,7 +1331,7 @@ function setupEvents() {
             localStorage.clear();
             saveEpaperPreference(epaperEnabled);
             applyControlMode(getDefaultControlMode(), { save: true, rebuild: false });
-            userELO = 300; savedErrors = []; currentStreak = 0; lastPracticeDate = null;
+            userELO = 200; savedErrors = []; currentStreak = 0; lastPracticeDate = null;
             todayCompleted = false; totalStars = 0; todayMissions = []; missionsDate = null; unlockedBadges = [];
             sessionStats = { 
                 gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
@@ -1399,8 +1399,8 @@ function setupEvents() {
         reader.onload = (ev) => {
             try {
                 const data = JSON.parse(ev.target.result);
-                if (confirm(`Importar dades? ELO: ${data.elo || 300}, Estrelles: ${data.totalStars || 0}`)) {
-                    userELO = data.elo || 300; savedErrors = data.bundles || [];
+                if (confirm(`Importar dades? ELO: ${data.elo || 200}, Estrelles: ${data.totalStars || 0}`)) {
+                    userELO = data.elo || 200; savedErrors = data.bundles || [];
                     currentStreak = data.streak || 0; lastPracticeDate = data.lastPracticeDate || null;
                     totalStars = data.totalStars || 0; unlockedBadges = data.unlockedBadges || [];
                     todayMissions = restoreMissions(data.todayMissions || []); missionsDate = data.missionsDate || null;
