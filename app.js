@@ -18,6 +18,22 @@ let isMatchErrorReviewSession = false;
 // Sistema d'IA Adaptativa
 let recentGames = []; 
 let aiDifficulty = 8; 
+const ADAPTIVE_LEVEL_KEY = 'chess_adaptiveLevel';
+const ADAPTIVE_CONFIG = {
+    MIN_LEVEL: 400,
+    MAX_LEVEL: 3000,
+    DEFAULT_LEVEL: 1200,
+    PRECISION_HIGH: 85,
+    PRECISION_MID: 70,
+    PRECISION_LOW: 45,
+    STREAK_DELTA: 100,
+    BOOST_HIGH: 80,
+    BOOST_MID: 50,
+    BOOST_LOW: 25,
+    PENALTY_SOFT: -40,
+    PENALTY_STRONG: -80
+};
+let adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
 let consecutiveWins = 0;
 let consecutiveLosses = 0;
 let isEngineThinking = false;
@@ -987,29 +1003,58 @@ function restoreMissions(savedList) {
         .filter(Boolean);
 }
 
+function clampAdaptiveLevel(level) {
+    if (isNaN(level)) return ADAPTIVE_CONFIG.DEFAULT_LEVEL;
+    return Math.max(ADAPTIVE_CONFIG.MIN_LEVEL, Math.min(ADAPTIVE_CONFIG.MAX_LEVEL, level));
+}
+
+function difficultyToLevel(legacyDifficulty) {
+    // Converteix l'antic rang 5-15 a ELO adaptatiu 400-3000
+    const normalized = Math.max(0, Math.min(1, ((legacyDifficulty || 8) - 5) / 10));
+    return Math.round(ADAPTIVE_CONFIG.MIN_LEVEL + normalized * (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL));
+}
+
+function levelToDifficulty(level) {
+    // Manté la compatibilitat amb l'antic rang 5-15
+    const normalized = Math.max(0, Math.min(1, (level - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
+    return Math.round(5 + normalized * 10);
+}
+
+function getAdaptiveNormalized() {
+    return Math.max(0, Math.min(1, (adaptiveLevel - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
+}
+
 function adjustAIDifficulty(playerWon, precision, resultScore = null) {
     const normalizedScore = (typeof resultScore === 'number') ? resultScore : (playerWon ? 1 : 0);
-    recentGames.push({ won: playerWon, precision: precision, result: normalizedScore });
-    if (recentGames.length > 10) recentGames.shift();
+    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
+
+    recentGames.push({ result: normalizedScore, precision: safePrecision });
+    if (recentGames.length > 20) recentGames.shift();
     
     if (normalizedScore === 1) { consecutiveWins++; consecutiveLosses = 0; } 
     else if (normalizedScore === 0) { consecutiveLosses++; consecutiveWins = 0; }
     else { consecutiveWins = 0; consecutiveLosses = 0; }
     
-    const recent5 = recentGames.slice(-5);
-    const avgScore = recent5.length > 0 ? recent5.reduce((sum, g) => sum + (typeof g.result === 'number' ? g.result : (g.won ? 1 : 0)), 0) / recent5.length : 0.5;
-    const avgPrecision = recent5.length > 0 ? recent5.reduce((sum, g) => sum + (typeof g.precision === 'number' ? g.precision : 50), 0) / recent5.length : 50;
+    const recentWindow = recentGames.slice(-8);
+    const avgScore = recentWindow.length > 0 ? recentWindow.reduce((sum, g) => {
+        const scoreValue = (typeof g.result === 'number') ? g.result : (g.won ? 1 : 0);
+        return sum + scoreValue;
+    }, 0) / recentWindow.length : 0.5;
+    const avgPrecision = recentWindow.length > 0 ? recentWindow.reduce((sum, g) => sum + (typeof g.precision === 'number' ? g.precision : 50), 0) / recentWindow.length : 50;
     
     let adjustment = 0;
-    if (consecutiveLosses >= 3) adjustment = -2;
-    else if (consecutiveLosses >= 2) adjustment = -1;
-    else if (consecutiveWins >= 3 && avgPrecision >= 70) adjustment = 2;
-    else if (consecutiveWins >= 3 && avgPrecision >= 70) adjustment = 2;
-    else if (avgScore > 0.7 && recent5.length >= 5) adjustment = 1;
-    else if (avgPrecision >= 80 && avgScore > 0.5) adjustment = 1;
-    else if (avgPrecision < 40 && avgScore < 0.5) adjustment = -1;
+    if (avgPrecision >= ADAPTIVE_CONFIG.PRECISION_HIGH && avgScore >= 0.6) adjustment += ADAPTIVE_CONFIG.BOOST_HIGH;
+    else if (avgPrecision >= ADAPTIVE_CONFIG.PRECISION_MID && avgScore >= 0.55) adjustment += ADAPTIVE_CONFIG.BOOST_MID;
+    else if (avgPrecision >= 60 && avgScore >= 0.5) adjustment += ADAPTIVE_CONFIG.BOOST_LOW;
+
+    if (avgPrecision < ADAPTIVE_CONFIG.PRECISION_LOW && avgScore < 0.45) adjustment += ADAPTIVE_CONFIG.PENALTY_SOFT;
+    if (avgPrecision < 40 && avgScore < 0.35) adjustment += ADAPTIVE_CONFIG.PENALTY_STRONG;
+
+    if (consecutiveWins >= 3) { adjustment += ADAPTIVE_CONFIG.STREAK_DELTA; consecutiveWins = 0; }
+    if (consecutiveLosses >= 3) { adjustment -= ADAPTIVE_CONFIG.STREAK_DELTA; consecutiveLosses = 0; }
     
-    aiDifficulty = Math.max(5, Math.min(15, aiDifficulty + adjustment));
+    adaptiveLevel = clampAdaptiveLevel(adaptiveLevel + adjustment);
+    aiDifficulty = levelToDifficulty(adaptiveLevel); // per compatibilitat amb dades antigues
     saveStorage();
 }
 
@@ -1436,7 +1481,8 @@ function setupEvents() {
                 leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
             };
             eloHistory = []; totalGamesPlayed = 0; totalWins = 0; maxStreak = 0;
-            aiDifficulty = 8; recentGames = []; consecutiveWins = 0; consecutiveLosses = 0;
+            adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
+            aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = []; consecutiveWins = 0; consecutiveLosses = 0;
             currentLeague = null; leagueActiveMatch = null;
             reviewHistory = []; currentReview = [];
             saveStorage(); generateDailyMissions(); updateDisplay();
@@ -1460,7 +1506,7 @@ function setupEvents() {
             totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
             sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed, 
             totalWins: totalWins, maxStreak: maxStreak,
-            aiDifficulty: aiDifficulty, recentGames: recentGames, consecutiveWins: consecutiveWins, 
+            aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins, 
             consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
             reviewHistory: reviewHistory, date: new Date().toLocaleDateString()
         };
@@ -1478,7 +1524,7 @@ function setupEvents() {
             totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
             sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed,
             totalWins: totalWins, maxStreak: maxStreak,
-            aiDifficulty: aiDifficulty, recentGames: recentGames, consecutiveWins: consecutiveWins,
+            aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins,
             consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
             reviewHistory: reviewHistory, date: new Date().toLocaleDateString()
         };
@@ -1507,7 +1553,8 @@ function setupEvents() {
                         leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
                     };
                     eloHistory = data.eloHistory || []; totalGamesPlayed = data.totalGamesPlayed || 0; totalWins = data.totalWins || 0; maxStreak = data.maxStreak || 0;
-                    aiDifficulty = data.aiDifficulty || 8; recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
+                    adaptiveLevel = clampAdaptiveLevel(typeof data.adaptiveLevel === 'number' ? data.adaptiveLevel : difficultyToLevel(data.aiDifficulty || 8));
+                    aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
                     currentLeague = data.currentLeague || null;
                     leagueActiveMatch = data.leagueActiveMatch || null;
                     reviewHistory = data.reviewHistory || [];
@@ -1853,7 +1900,7 @@ function startGame(isBundle, fen = null) {
     } else {
         currentGameMode = 'free';
         currentOpponent = null;
-        $('#engine-elo').text('Adaptativa');
+        $('#engine-elo').text(`Adaptativa · ELO ${Math.round(adaptiveLevel)}`);
         $('#game-mode-title').text('♟ Nova partida');
     }
     
