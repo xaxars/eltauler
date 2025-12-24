@@ -800,6 +800,16 @@
             margin: 4px auto 12px;
             filter: drop-shadow(0 6px 12px rgba(0,0,0,0.35));
         }
+        #checkmate-overlay .modal-content {
+            background: transparent;
+            box-shadow: none;
+            padding: 0;
+            border: none;
+        }
+        #checkmate-overlay .checkmate-image {
+            display: block;
+            margin: 0 auto;
+        }        
         .review-actions {
             display: flex;
             gap: 10px;
@@ -987,7 +997,12 @@
                 <button class="btn btn-primary" onclick="$('#new-badge-modal').hide()">Genial!</button>
             </div>
         </div>
-           <div class="modal-overlay" id="review-modal">
+        <div class="modal-overlay" id="checkmate-overlay">
+            <div class="modal-content">
+                <img src="checkmate.svg" alt="Escac i mat" class="checkmate-image">
+            </div>
+        </div>
+        <div class="modal-overlay" id="review-modal">
             <div class="modal-content">
                 <div class="modal-title">📈 Revisió de la partida</div>
                 <img src="checkmate.svg" alt="Escac i mat" id="checkmate-image" class="checkmate-image">
