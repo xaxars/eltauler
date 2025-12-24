@@ -1620,6 +1620,20 @@ function setupEvents() {
     $('#blunder-alert').click(() => {
         if (engineMoveTimeout) clearTimeout(engineMoveTimeout);
 
+        if (game && game.game_over()) {
+            if (lastReviewSnapshot) {
+                showPostGameReview(
+                    lastReviewSnapshot.msg,
+                    lastReviewSnapshot.finalPrecision,
+                    lastReviewSnapshot.counts,
+                    null,
+                    { showCheckmate: lastReviewSnapshot.showCheckmate }
+                );
+            }
+            $('#blunder-alert').hide();
+            return;
+        }
+        
         const targetFen = lastPosition || null;
         if (targetFen) {
             game.load(targetFen);
@@ -2406,7 +2420,7 @@ function saveBlunderToBundle(fen, severity) {
         let typeErrors = savedErrors.filter(e => e.severity === severity);
         if (typeErrors.length >= 10) {
             let furthestError = typeErrors.reduce((prev, curr) => {
-                let prevDiff = Math.abs((prev.elo || 400) - userELO);
+                  let prevDiff = Math.abs((prev.elo || 400) - userELO);
                 let currDiff = Math.abs((curr.elo || 400) - userELO);
                 return (currDiff > prevDiff) ? curr : prev;
             });
@@ -2421,7 +2435,8 @@ function saveBlunderToBundle(fen, severity) {
 
 function handleGameOver(manualResign = false) {
     pendingMoveEvaluation = false;
-    let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
+    $('#blunder-alert').hide();        
+     let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
     let leagueOutcome = 'draw';
     const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
