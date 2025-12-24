@@ -36,12 +36,15 @@ const ADAPTIVE_CONFIG = {
     PENALTY_SOFT: -40,
     PENALTY_STRONG: -80
 };
+const CALIBRATION_ENGINE_PRECISION = 50;
+const CALIBRATION_ENGINE_DIFFICULTY = 10;
 let adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
 let consecutiveWins = 0;
 let consecutiveLosses = 0;
 let isCalibrationPhase = true;
 let calibrationMoves = 0;
 let calibrationGoodMoves = 0;
+let isCalibrationGame = false;
 let isEngineThinking = false;
 let engineMoveCandidates = [];
 let lastReviewSnapshot = null;
@@ -1027,6 +1030,10 @@ function levelToDifficulty(level) {
     return Math.round(5 + normalized * 10);
 }
 
+function getEffectiveAIDifficulty() {
+    return isCalibrationGame ? CALIBRATION_ENGINE_DIFFICULTY : aiDifficulty;
+}
+
 function getAdaptiveNormalized() {
     return Math.max(0, Math.min(1, (adaptiveLevel - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
 }
@@ -1044,8 +1051,18 @@ function finalizeCalibration() {
     saveStorage();
 }
 
+function finalizeCalibrationFromPrecision(precision) {
+    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
+    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(safePrecision));
+    aiDifficulty = levelToDifficulty(adaptiveLevel);
+    calibrationMoves = ADAPTIVE_CONFIG.CALIBRATION_MOVES;
+    calibrationGoodMoves = Math.round((safePrecision / 100) * ADAPTIVE_CONFIG.CALIBRATION_MOVES);
+    isCalibrationPhase = false;
+    saveStorage();
+}
+
 function registerCalibrationMove(isGood) {
-    if (!isCalibrationPhase || blunderMode || currentGameMode === 'drill') return;
+    if (!isCalibrationPhase || isCalibrationGame || blunderMode || currentGameMode === 'drill') return;
     if (calibrationMoves >= ADAPTIVE_CONFIG.CALIBRATION_MOVES) return;
     calibrationMoves += 1;
     if (isGood) calibrationGoodMoves += 1;
@@ -1098,9 +1115,10 @@ function getOpponentElo() {
 
 function getAIDepth() {
     const randomness = Math.floor(Math.random() * 3) - 1;
-
-    if (currentGameMode !== 'league') {
-        return Math.max(1, Math.min(15, aiDifficulty + randomness));
+    const effectiveDifficulty = getEffectiveAIDifficulty();
+    
+    if (isCalibrationGame || currentGameMode !== 'league') {
+        return Math.max(1, Math.min(15, effectiveDifficulty + randomness));
     }
 
     const oppElo = getOpponentElo();   
@@ -1110,7 +1128,8 @@ function getAIDepth() {
 }
 
 function getEngineSkillLevel() {
-    const normalized = Math.max(0, Math.min(1, (aiDifficulty - 5) / 10));
+    const effectiveDifficulty = getEffectiveAIDifficulty();
+    const normalized = Math.max(0, Math.min(1, (effectiveDifficulty - 5) / 10));
     const minSkill = 2;
     const maxSkill = 18;
     return Math.round(minSkill + (maxSkill - minSkill) * normalized);
@@ -1160,7 +1179,8 @@ function chooseHumanLikeMove(candidates) {
     if (!candidates || candidates.length === 0) return null;
     const sorted = candidates.slice().sort((a, b) => b.score - a.score);
 
-    const normalized = Math.max(0, Math.min(1, (aiDifficulty - 5) / 10));
+    const effectiveDifficulty = getEffectiveAIDifficulty();
+    const normalized = Math.max(0, Math.min(1, (effectiveDifficulty - 5) / 10));
     const bestScore = sorted[0].score;
     const maxDelta = 250 - (normalized * 170); // Més desviació a nivells baixos
 
@@ -1887,6 +1907,7 @@ function startGame(isBundle, fen = null) {
     $('#game-screen').show();
     
     blunderMode = isBundle; 
+    isCalibrationGame = isCalibrationPhase && !isBundle && currentGameMode !== 'drill';
     currentBundleFen = fen;
     lastHumanMoveUci = null;
     isBundleTop2Analysis = false;
@@ -1949,7 +1970,11 @@ function startGame(isBundle, fen = null) {
     $('#blunder-alert').hide();
 
     // Lògica de Modes
-    if (currentGameMode === 'drill') {
+    if (isCalibrationGame) {
+        $('#engine-elo').text(`Calibratge · ${CALIBRATION_ENGINE_PRECISION}%`);
+        $('#game-mode-title').text('🎯 Partida de calibratge');
+    } else if (currentGameMode === 'drill') {
+        $('#engine-elo').text('Mestre');
         $('#engine-elo').text('Mestre');
     } else if (isBundle) {
         currentGameMode = 'bundle';
@@ -2532,6 +2557,7 @@ function handleGameOver(manualResign = false) {
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
     let leagueOutcome = 'draw';
     const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
+    const calibrationGameWasActive = isCalibrationGame;
     
     if (manualResign) { 
         msg = "T'has rendit."; resultScore = 0; leagueOutcome = 'loss'; 
@@ -2577,7 +2603,14 @@ function handleGameOver(manualResign = false) {
     userELO = Math.max(50, userELO + change); 
     updateEloHistory(userELO);
     
-    if (!blunderMode && currentGameMode !== 'drill') adjustAIDifficulty(playerWon, finalPrecision, resultScore);
+    if (calibrationGameWasActive) {
+        finalizeCalibrationFromPrecision(finalPrecision);
+        isCalibrationGame = false;
+    }
+
+    if (!blunderMode && currentGameMode !== 'drill' && !calibrationGameWasActive) {
+        adjustAIDifficulty(playerWon, finalPrecision, resultScore);
+    }
 
     if (wasLeagueMatch && !blunderMode) {
         applyLeagueAfterGame(leagueOutcome);
