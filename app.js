@@ -57,14 +57,14 @@ let currentBundleFen = null;
 let playerColor = 'w';
 let isRandomBundleSession = false;
 const LEAGUE_QUOTES = [
-    "“El millor moment per jugar és ara.”",
-    "“La sort somriu als valents.”",
-    "“El tauler és teu, confia en el teu pla.”",
-    "“Cada partida és una oportunitat de créixer.”",
-    "“Aprofita la iniciativa!”",
-    "“La preparació és mitja victòria.”",
-    "“El rival també dubta; lidera tu.”",
-    "“Juga amb calma, acaba amb força.”"
+    ""El millor moment per jugar és ara."",
+    ""La sort somriu als valents."",
+    ""El tauler és teu, confia en el teu pla."",
+    ""Cada partida és una oportunitat de créixer."",
+    ""Aprofita la iniciativa!"",
+    ""La preparació és mitja victòria."",
+    ""El rival també dubta; lidera tu."",
+    ""Juga amb calma, acaba amb força.""
 ];
 
 let totalPlayerMoves = 0;
@@ -1138,6 +1138,7 @@ function getEngineSkillLevel() {
     const maxSkill = 18;
     return Math.round(minSkill + (maxSkill - minSkill) * normalized);
 }
+
 function calculateEloDelta(resultScore) {
     const oppElo = getOpponentElo();
     const expected = 1 / (1 + Math.pow(10, (oppElo - userELO) / 400));
@@ -1215,23 +1216,40 @@ function chooseHumanLikeMove(candidates) {
 }
 
 function chooseCalibrationMove(candidates, fallbackMove) {
-    if (!candidates || candidates.length === 0) return { move: fallbackMove };
+    if (!candidates || candidates.length === 0) {
+        console.warn("No candidates per calibració, usant fallback");
+        return { move: fallbackMove };
+    }
+    
     const sorted = candidates.slice().sort((a, b) => b.score - a.score);
     const bestScore = sorted[0].score;
-    const goodCandidates = sorted.filter(c => (bestScore - c.score) <= 80);
-    const badCandidates = sorted.filter(c => (bestScore - c.score) > 80);
-    const target = CALIBRATION_ENGINE_PRECISION / 100;
+    
+    // Criteris més graduats per classificar les jugades
+    const excellentMoves = sorted.filter(c => (bestScore - c.score) <= 30);
+    const decentMoves = sorted.filter(c => (bestScore - c.score) > 30 && (bestScore - c.score) <= 100);
+    const poorMoves = sorted.filter(c => (bestScore - c.score) > 100);
+    
+    const target = CALIBRATION_ENGINE_PRECISION / 100; // 0.5
     const currentPrecision = totalEngineMoves > 0 ? (goodEngineMoves / totalEngineMoves) : target;
-
-    let pickGood = true;
-    if (badCandidates.length === 0) pickGood = true;
-    else if (goodCandidates.length === 0) pickGood = false;
-    else if (currentPrecision < target) pickGood = true;
-    else if (currentPrecision > target) pickGood = false;
-    else pickGood = Math.random() < target;
-
-    const pool = pickGood ? goodCandidates : badCandidates;
+    
+    // Decidir pool amb més granularitat
+    let pool;
+    if (currentPrecision < target - 0.1) {
+        // Necessitem pujar precisió
+        pool = excellentMoves.length > 0 ? excellentMoves : decentMoves;
+    } else if (currentPrecision > target + 0.1) {
+        // Necessitem baixar precisió
+        pool = poorMoves.length > 0 ? poorMoves : decentMoves;
+    } else {
+        // Estem al target, barrejar segons probabilitat
+        pool = Math.random() < target ? excellentMoves : decentMoves;
+        if (pool.length === 0) pool = excellentMoves.length > 0 ? excellentMoves : poorMoves;
+    }
+    
+    if (pool.length === 0) pool = sorted; // Safety fallback
+    
     const choice = pool[Math.floor(Math.random() * pool.length)];
+    console.log(`Calibració: Precisió actual ${(currentPrecision*100).toFixed(1)}%, delta escollit ${bestScore - choice.score}`);
     return choice || { move: fallbackMove };
 }
 
@@ -2117,12 +2135,12 @@ function makeEngineMove() {
     isEngineThinking = true; 
     $('#status').text("L'adversari pensa...");
         
-    const depth = (currentGameMode === 'drill') ? 20 : (isCalibrationGame ? Math.max(4, getAIDepth() - 2) : getAIDepth()); 
+    const depth = isCalibrationGame ? 12 : (currentGameMode === 'drill' ? 20 : getAIDepth()); 
     const skillLevel = getEngineSkillLevel();
     resetEngineMoveCandidates();
 
     try { stockfish.postMessage(`setoption name Skill Level value ${skillLevel}`); } catch (e) {}
-    const multiPvValue = isCalibrationGame ? 7 : 5;
+    const multiPvValue = isCalibrationGame ? 12 : 5;
     try { stockfish.postMessage(`setoption name MultiPV value ${multiPvValue}`); } catch (e) {}
     stockfish.postMessage(`position fen ${game.fen()}`); 
     stockfish.postMessage(`go depth ${depth}`);
@@ -2271,7 +2289,7 @@ function handleEngineMessage(msg) {
                 : (chooseHumanLikeMove(engineMoveCandidates) || { move: null });
             const moveStr = (engineMoveCandidates.length > 0 && chosen.move)
                 ? chosen.move
-                : chooseFallbackMove(fallbackMove);
+                : fallbackMove;
             const fromSq = moveStr.substring(0, 2);
             const toSq = moveStr.substring(2, 4);
             const promotion = moveStr.length > 4 ? moveStr[4] : (match[3] || 'q');
@@ -2563,97 +2581,6 @@ function handleGameOver(manualResign = false) {
     pendingMoveEvaluation = false;
     $('#blunder-alert').hide();        
      let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
-    const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
-    let leagueOutcome = 'draw';
-    const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
-    
-    if (manualResign) { 
-        msg = "T'has rendit."; resultScore = 0; leagueOutcome = 'loss'; 
-    }
-    else if (game.in_checkmate()) {
-        if (game.turn() !== playerColor) { 
-            msg = "Victòria!"; resultScore = 1; playerWon = true; leagueOutcome = 'win'; 
-            sessionStats.gamesWon++; totalWins++;
-            if (playerColor === 'b') sessionStats.blackWins++;
-        } else { msg = "Derrota."; resultScore = 0; leagueOutcome = 'loss'; }
-    } else { msg = "Taules."; resultScore = 0.5; leagueOutcome = 'draw'; }
-        
-    sessionStats.gamesPlayed++; totalGamesPlayed++;
-    
-    if (currentGameMode === 'league') sessionStats.leagueGamesPlayed++;
-    else if (currentGameMode === 'free') sessionStats.freeGamesPlayed++;
-
-    if (finalPrecision >= 70) sessionStats.highPrecisionGames++;
-    if (finalPrecision >= 85) sessionStats.perfectGames++;
-    
-    // LÒGICA DRILLS
-    if (currentGameMode === 'drill') {
-        if (playerWon) {
-            alert("Entrenament completat! 🎉");
-            sessionStats.drillsSolved++;
-            checkMissions();
-            returnToMainMenuImmediate();
-            return;
-        } else {
-            if(confirm("Entrenament fallit. Vols tornar'ho a provar?")) {
-                game.undo(); board.position(game.fen()); return;
-            } else {
-                returnToMainMenuImmediate(); return;
-            }
-        }
-    }
-
-    change = calculateEloDelta(resultScore);
-    msg += ` (${formatEloChange(change)})`;
-
-    if (blunderMode && playerWon && currentBundleFen) { handleBundleSuccess(); return; }
-    
-    userELO = Math.max(50, userELO + change); 
-    updateEloHistory(userELO);
-    
-    if (!blunderMode && currentGameMode !== 'drill') adjustAIDifficulty(playerWon, finalPrecision, resultScore);
-
-    if (wasLeagueMatch && !blunderMode) {
-        applyLeagueAfterGame(leagueOutcome);
-    }
-    
-    const reviewCounts = summarizeReview(currentReview);
-    persistReviewSummary(finalPrecision, msg);
-    recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
-    $('#status').text(msg);
-    
-    // Gestió de l'indicador de resultat
-    if (leagueOutcome === 'win') setResultIndicator('win');
-    else if (leagueOutcome === 'loss') setResultIndicator('loss');
-    else setResultIndicator('draw');
-    
-    // Mostrar imatge de checkmate si és escac mat i victòria
-    const showCheckmate = game.in_checkmate() && playerWon;
-    if (showCheckmate) {
-        const checkmateImage = $('#checkmate-image');
-        if (checkmateImage.length) checkmateImage.show();
-    }
-    
-    let reviewHeader = msg;
-    if (currentStreak > 0) reviewHeader += ` · Ratxa ${currentStreak} dies`;
-    
-    // Guardar snapshot per poder reobrir la revisió
-    lastReviewSnapshot = {
-        msg: reviewHeader,
-        finalPrecision: finalPrecision,
-        counts: reviewCounts,
-        showCheckmate: showCheckmate
-    };
-    
-    const onClose = () => {
-        if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
-    };
-    showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
-}
-
-function handleGameOver(manualResign = false) {
-    pendingMoveEvaluation = false;
-    let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
     let leagueOutcome = 'draw';
     const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
