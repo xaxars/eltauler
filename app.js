@@ -15,6 +15,7 @@ let matchErrorQueue = [];
 let currentMatchError = null;
 let isMatchErrorReviewSession = false;
 let reviewAutoCloseTimer = null;
+let reviewOpenDelayTimer = null;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -2243,32 +2244,39 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
         return;
     }
     
-    // Mostrar/ocultar imatge de checkmate
-    const checkmateImage = $('#checkmate-image');
-    if (checkmateImage.length) {
-        if (options.showCheckmate) {
-            checkmateImage.show();
-        } else {
-            checkmateImage.hide();
+   const checkmateOverlay = $('#checkmate-overlay');
+    const openReviewModal = () => {
+        if (checkmateImage.length) {
+            if (options.showCheckmate) {
+                checkmateImage.show();
+            } else {
+                checkmateImage.hide();
+            }
         }
-    }
     
-    $('#review-result-text').text(msg);
-    $('#review-precision-value').text(finalPrecision ? `${finalPrecision}%` : '—');
-    renderReviewBreakdown(counts || summarizeReview(currentReview));
-    modal.css('display', 'flex');
-
+        $('#review-result-text').text(msg);
+        $('#review-precision-value').text(finalPrecision ? `${finalPrecision}%` : '—');
+        renderReviewBreakdown(counts || summarizeReview(currentReview));
+        modal.css('display', 'flex');
+    };
+    
     if (reviewAutoCloseTimer) {
         clearTimeout(reviewAutoCloseTimer);
         reviewAutoCloseTimer = null;
     }
+    if (reviewOpenDelayTimer) {
+        clearTimeout(reviewOpenDelayTimer);
+        reviewOpenDelayTimer = null;
+    }
 
-    if (options.showCheckmate) {
-        reviewAutoCloseTimer = setTimeout(() => {
-            modal.hide();
-            $('#blunder-alert').hide();
-            if (typeof onClose === 'function') onClose();
+     if (options.showCheckmate && checkmateOverlay.length) {
+        checkmateOverlay.css('display', 'flex');
+        reviewOpenDelayTimer = setTimeout(() => {
+            checkmateOverlay.hide();
+            openReviewModal();
         }, 3000);
+    } else {
+        openReviewModal();
     }
 
     const hasMatchErrors = currentGameErrors.length > 0;
@@ -2286,6 +2294,11 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
             clearTimeout(reviewAutoCloseTimer);
             reviewAutoCloseTimer = null;
         }
+        if (reviewOpenDelayTimer) {
+            clearTimeout(reviewOpenDelayTimer);
+            reviewOpenDelayTimer = null;
+        }
+        checkmateOverlay.hide();        
         modal.hide();
         if (typeof onClose === 'function') onClose();
     });
@@ -2294,6 +2307,11 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
             clearTimeout(reviewAutoCloseTimer);
             reviewAutoCloseTimer = null;
         }        
+                if (reviewOpenDelayTimer) {
+            clearTimeout(reviewOpenDelayTimer);
+            reviewOpenDelayTimer = null;
+        }
+        checkmateOverlay.hide();
         modal.hide();
         $('#start-screen').hide(); $('#league-screen').hide(); $('#game-screen').hide(); $('#stats-screen').show();
         updateStatsDisplay();
