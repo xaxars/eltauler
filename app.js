@@ -38,7 +38,7 @@ const ADAPTIVE_CONFIG = {
     PENALTY_SOFT: -40,
     PENALTY_STRONG: -80
 };
-const ERROR_WINDOW_N = 20;
+const ERROR_WINDOW_N = 30;
 const TH_ERR = 80;
 const ERROR_TARGET = 0.35;
 const STEP_ELO = 40;
