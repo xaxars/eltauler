@@ -759,20 +759,6 @@
         .confirm-buttons { display: flex; gap: 8px; }
         .confirm-buttons .btn { flex: 1; padding: 10px; font-size: 0.85rem; }
 
-               .confirm-modal-message {
-            font-size: 0.95rem;
-            color: var(--text-primary);
-            margin-bottom: 16px;
-            line-height: 1.4;
-        }
-        .confirm-modal-actions {
-            display: flex;
-            gap: 10px;
-        }
-        .confirm-modal-actions .btn {
-            flex: 1;
-        }
-
         /* Lliga */
         .league-meta {
             background: var(--bg-warm);
@@ -1176,17 +1162,6 @@
                     <button class="btn btn-secondary" id="btn-review-errors">🔍 Revisar errors</button>
                     <button class="btn btn-primary" id="btn-review-stats">📊 Veure evolució</button>
                     <button class="close-modal" id="btn-review-close">Tancar</button>
-                </div>
-            </div>
-        </div>
-  
-        <div class="modal-overlay" id="confirm-modal" style="display:none;">
-            <div class="modal-content">
-                <div class="modal-title" id="confirm-modal-title">Confirmació</div>
-                <div class="confirm-modal-message" id="confirm-modal-message">—</div>
-                <div class="confirm-modal-actions">
-                    <button class="btn btn-secondary" id="confirm-modal-cancel">Cancel·lar</button>
-                    <button class="btn btn-primary" id="confirm-modal-confirm">Confirmar</button>
                 </div>
             </div>
         </div>
