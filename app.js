@@ -1063,18 +1063,32 @@ function precisionToAdaptiveLevel(precision) {
     return Math.round(ADAPTIVE_CONFIG.MIN_LEVEL + normalized * (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL));
 }
 
+function precisionToUserElo(precision) {
+    const normalized = Math.max(0, Math.min(1, (precision || 0) / 100));
+    return Math.round(ELO_MIN + normalized * (ELO_MAX - ELO_MIN));
+}
+
+function applyCalibrationResult(precision) {
+    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
+    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(safePrecision));
+    aiDifficulty = levelToDifficulty(adaptiveLevel);
+    currentElo = clampEngineElo(adaptiveLevel);
+    applyEngineEloStrength(currentElo);
+    updateAdaptiveEngineEloLabel();
+    userELO = Math.max(50, precisionToUserElo(safePrecision));
+    updateEloHistory(userELO);
+}
+
 function finalizeCalibration() {
     const avgPrecision = calibrationMoves > 0 ? Math.round((calibrationGoodMoves / calibrationMoves) * 100) : 50;
-    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(avgPrecision));
-    aiDifficulty = levelToDifficulty(adaptiveLevel);
+    applyCalibrationResult(avgPrecision);
     isCalibrationPhase = false;
     saveStorage();
 }
 
 function finalizeCalibrationFromPrecision(precision) {
     const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
-    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(safePrecision));
-    aiDifficulty = levelToDifficulty(adaptiveLevel);
+    applyCalibrationResult(safePrecision);
     calibrationMoves = ADAPTIVE_CONFIG.CALIBRATION_MOVES;
     calibrationGoodMoves = Math.round((safePrecision / 100) * ADAPTIVE_CONFIG.CALIBRATION_MOVES);
     isCalibrationPhase = false;
