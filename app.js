@@ -1,6 +1,9 @@
 // El Tauler - Entrenador d'Escacs PWA
 // app.js - Lògica principal de l'aplicació
 
+const APP_VERSION = window.APP_VERSION || 'dev';
+const STOCKFISH_URL = `stockfish.js?v=${APP_VERSION}`;
+
 let game = null;
 let board = null;
 let stockfish = null;
@@ -1251,7 +1254,7 @@ function chooseCalibrationMove(candidates, fallbackMove) {
 // MODIFICAT: Ara carrega directament el fitxer local
 function createStockfishWorker() {
     try {
-        return new Worker('stockfish.js');
+        return new Worker(STOCKFISH_URL);
     } catch (e) {
         console.error("Error carregant Stockfish local:", e);
         return null;
