@@ -572,11 +572,25 @@
             border-radius: 10px;
             padding: 10px 12px;
             border: 1px solid rgba(201, 162, 39, 0.15);
+            flex-wrap: wrap;        
         }
         body.epaper-mode .history-item {
             background: #eaeaea;
             border-color: #cfcfcf;
         }
+        .history-item-main {
+            flex: 1 1 180px;
+        }
+        .history-item-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .history-item-actions .btn {
+            padding: 8px 10px;
+            font-size: 0.8rem;
+        }        
         .history-item-title { font-weight: 600; font-size: 0.95rem; }
         .history-item-meta { font-size: 0.75rem; color: var(--text-secondary); }
         .history-empty { color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 12px; }
