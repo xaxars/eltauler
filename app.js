@@ -1902,18 +1902,20 @@ function updateTvDetails(entry) {
 
 async function fetchTvPgn(entry) {
     if (!entry) return '';
-    if (entry.pgnText) return entry.pgnText.trim();
-    if (!entry.pgnUrl) return '';
-    try {
-        const response = await fetch(entry.pgnUrl, {
-            headers: { 'Accept': 'application/x-chess-pgn' }
-        });
-        if (!response.ok) throw new Error('PGN fetch failed');
-        const text = await response.text();
-        return text.trim() || '';
-    } catch (err) {
-        return '';
+       if (entry.pgnUrl) {
+        try {
+            const response = await fetch(entry.pgnUrl, {
+                headers: { 'Accept': 'application/x-chess-pgn' }
+            });
+            if (!response.ok) throw new Error('PGN fetch failed');
+            const text = await response.text();
+            const trimmed = text.trim();
+            if (trimmed) return trimmed;
+        } catch (err) {
+            // Fall through to embedded PGN if available.
+        }
     }
+    return entry.pgnText ? entry.pgnText.trim() : '';
 }
 
 async function loadTvGame(entry) {
