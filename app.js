@@ -2408,10 +2408,12 @@ function makeEngineMove() {
                 isEngineThinking = true;
                 $('#status').text("El Mestre Català mou...");
                 setTimeout(() => {
-                    game.move({ from: forcedMove.substring(0,2), to: forcedMove.substring(2,4) });
+                    const fromSq = forcedMove.substring(0,2);
+                    const toSq = forcedMove.substring(2,4);
+                    game.move({ from: fromSq, to: toSq });
                     board.position(game.fen());
                     isEngineThinking = false;
-                    highlightEngineMove(forcedMove.substring(0,2), forcedMove.substring(2,4));
+                    requestAnimationFrame(() => highlightEngineMove(fromSq, toSq));
                     registerEngineMovePrecision(forcedMove, null);
                     
                     if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
