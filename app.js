@@ -2237,6 +2237,7 @@ function startGame(isBundle, fen = null) {
     $('#start-screen').hide(); 
     $('#stats-screen').hide(); 
     $('#league-screen').hide(); 
+    $('#history-screen').hide();
     $('#game-screen').show();
     
     blunderMode = isBundle; 
