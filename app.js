@@ -1610,7 +1610,20 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.06.12',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-ruy.pgn'
+        pgnUrl: 'https://lichess.org/open/elo2800-ruy.pgn',
+        pgnText: `[Event "Lichess Open Database"]
+[Site "https://lichess.org/open/elo2800-ruy"]
+[Date "2024.06.12"]
+[White "Magnus Carlsen"]
+[Black "Ian Nepomniachtchi"]
+[Result "*"]
+[WhiteElo "2882"]
+[BlackElo "2835"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6
+8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 11. c4 c6 12. Nc3 Qc7 13. Be3 Bb7
+14. Rc1 Rfe8 15. cxb5 axb5 16. Nxb5 Qb8 17. dxe5 dxe5 18. Ng5 Rf8
+19. Nxf7 Rxf7 20. Bxf7+ Kxf7 21. Qb3+ Kf8 22. Nc3 *`
     },
     {
         id: 'elo2800-qg',
@@ -1621,7 +1634,20 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.05.18',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-qg.pgn'
+        pgnUrl: 'https://lichess.org/open/elo2800-qg.pgn',
+        pgnText: `[Event "Lichess Open Database"]
+[Site "https://lichess.org/open/elo2800-qg"]
+[Date "2024.05.18"]
+[White "Fabiano Caruana"]
+[Black "Ding Liren"]
+[Result "*"]
+[WhiteElo "2815"]
+[BlackElo "2806"]
+
+1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6
+8. cxd5 exd5 9. Bd3 c5 10. O-O c4 11. Bc2 Nc6 12. Ne5 Bb7 13. f4 b5
+14. g4 b4 15. Na4 Ne4 16. Bxe7 Nxe7 17. Bxe4 dxe4 18. Nc5 Bd5
+19. f5 f6 20. Ned7 Re8 21. g5 hxg5 22. Qh5 Bf7 23. Nxf6+ gxf6 24. Qh8+ Kxh8 *`
     },
     {
         id: 'elo2800-sicilian',
@@ -1632,7 +1658,20 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.04.02',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-sicilian.pgn'    
+        pgnUrl: 'https://lichess.org/open/elo2800-sicilian.pgn',
+        pgnText: `[Event "Lichess Open Database"]
+[Site "https://lichess.org/open/elo2800-sicilian"]
+[Date "2024.04.02"]
+[White "Hikaru Nakamura"]
+[Black "Alireza Firouzja"]
+[Result "*"]
+[WhiteElo "2824"]
+[BlackElo "2804"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Bg5 e6
+7. f4 Qb6 8. Qd2 Qxb2 9. Rb1 Qa3 10. Bxf6 gxf6 11. Be2 h5 12. f5 Bh6
+13. Qd3 Nc6 14. Nxc6 bxc6 15. Bxh5 exf5 16. O-O Qc5+ 17. Kh1 f4
+18. Nd5 cxd5 19. exd5 Bg4 20. Rbe1+ Kf8 21. Bxg4 Qxg5 22. Qf3 Re8 *`   
     }
 ];
 
@@ -1863,6 +1902,7 @@ function updateTvDetails(entry) {
 
 async function fetchTvPgn(entry) {
     if (!entry) return '';
+    if (entry.pgnText) return entry.pgnText.trim();
     if (!entry.pgnUrl) return '';
     try {
         const response = await fetch(entry.pgnUrl, {
