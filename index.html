@@ -315,6 +315,41 @@
         body.epaper-mode .setting-help,
         body.epaper-mode .subtitle,
         body.epaper-mode .review-highlight { color: #444; }
+ 
+        /* TV GRID */
+        .tv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .tv-card {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 14px 12px;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+        }
+        .tv-card strong { display: block; font-size: 1.2rem; margin-top: 4px; }
+        .tv-card.gold { background: linear-gradient(135deg, rgba(201, 162, 39, 0.35), rgba(118, 94, 18, 0.5)); border-color: rgba(201, 162, 39, 0.35); }
+        .tv-card.green { background: linear-gradient(135deg, rgba(74, 124, 89, 0.35), rgba(40, 74, 51, 0.55)); border-color: rgba(74, 124, 89, 0.35); }
+        .tv-card.purple { background: linear-gradient(135deg, rgba(156, 39, 176, 0.3), rgba(74, 20, 140, 0.55)); border-color: rgba(156, 39, 176, 0.35); }
+        .tv-card.blue { background: linear-gradient(135deg, rgba(25, 118, 210, 0.3), rgba(13, 71, 161, 0.6)); border-color: rgba(25, 118, 210, 0.35); }
+        .tv-card.steel { background: linear-gradient(135deg, rgba(96, 125, 139, 0.35), rgba(55, 71, 79, 0.6)); border-color: rgba(96, 125, 139, 0.35); }
+        .tv-card.ember { background: linear-gradient(135deg, rgba(212, 118, 59, 0.35), rgba(116, 60, 28, 0.6)); border-color: rgba(212, 118, 59, 0.35); }
+        .tv-card.sand { background: linear-gradient(135deg, rgba(244, 228, 188, 0.25), rgba(168, 154, 138, 0.5)); border-color: rgba(244, 228, 188, 0.35); color: #fef6e6; }
+        .tv-card.shadow { background: linear-gradient(135deg, rgba(61, 50, 42, 0.6), rgba(26, 20, 16, 0.9)); border-color: rgba(255, 255, 255, 0.08); }
+        body.epaper-mode .tv-card {
+            background: #e6e6e6;
+            color: #222;
+            border-color: #cfcfcf;
+            box-shadow: none;
+        }      
         
         /* BUTTONS */
         .menu-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
@@ -1141,8 +1176,17 @@
                 <div class="subtitle">Avui només activem la pestanya. Aviat hi haurà contingut.</div>
             </div>
             <div class="settings-panel">
-                <div class="settings-title">Properament</div>
-                <div class="setting-help">Estem preparant una secció amb contingut seleccionat. Torna aviat!</div>
+                <div class="settings-title">Nivells TV</div>
+                <div class="tv-grid">
+                    <div class="tv-card gold">ELO <strong>2800</strong></div>
+                    <div class="tv-card purple">ELO <strong>2700</strong></div>
+                    <div class="tv-card blue">ELO <strong>2600</strong></div>
+                    <div class="tv-card green">ELO <strong>2500</strong></div>
+                    <div class="tv-card steel">ELO <strong>2200</strong></div>
+                    <div class="tv-card ember">ELO <strong>2000</strong></div>
+                    <div class="tv-card sand">ELO <strong>1800</strong></div>
+                    <div class="tv-card shadow">ELO <strong>1500</strong></div>
+                </div>
             </div>
             <div class="menu-buttons" style="margin-top:20px;">
                 <button class="btn btn-primary" id="btn-back-tv">Tornar al Menú</button>
