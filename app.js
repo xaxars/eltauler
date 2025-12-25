@@ -2180,6 +2180,13 @@ function startMatchErrorReview() {
     launchNextMatchError();
 }
 
+function scrollToMatchErrorReview() {
+    const boardEl = document.getElementById('myBoard');
+    const target = boardEl || document.getElementById('game-screen');
+    if (!target || typeof target.scrollIntoView !== 'function') return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function launchNextMatchError() {
     if (matchErrorQueue.length === 0) {
         endMatchErrorReviewSession();
@@ -2283,7 +2290,10 @@ function startGame(isBundle, fen = null) {
     });
 
     setTimeout(() => { resizeBoardToViewport(); }, 0);
-
+    if (isMatchErrorReviewSession) {
+        setTimeout(() => { scrollToMatchErrorReview(); }, 0);
+    }
+    
     if (controlMode === 'tap') {
         detachDragGuards();
         disableTapToMove(); 
