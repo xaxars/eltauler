@@ -186,24 +186,6 @@
         .streak-value { color: var(--streak-fire); }
         .stars-value { color: var(--star-gold); text-shadow: 0 0 10px rgba(255,215,0,0.5); }
         
-        .floating-resign-button {
-            position: fixed;
-            right: 18px;
-            bottom: 18px;
-            z-index: 1000;
-            border-radius: 999px;
-            padding: 12px 18px;
-            font-size: 0.9rem;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-        }
-        body.device-mobile .floating-resign-button {
-            right: 12px;
-            bottom: 12px;
-            padding: 10px 14px;
-            font-size: 0.85rem;
-        }
-        body.epaper-mode .floating-resign-button { box-shadow: none; }
-
         .resign-modal-actions {
             display: flex;
             justify-content: center;
@@ -1298,7 +1280,6 @@
                 </div>
             </div>
    
-            <button class="btn btn-primary floating-resign-button" id="btn-resign-float">🏳️ Rendir-me</button>
         </div>
     </div>
 
