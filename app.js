@@ -2857,99 +2857,6 @@ function saveBlunderToBundle(fen, severity) {
 
 function handleGameOver(manualResign = false) {
     pendingMoveEvaluation = false;
-    $('#blunder-alert').hide();        
-     let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
-    const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
-    let leagueOutcome = 'draw';
-    const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
-    
-    if (manualResign) { 
-        msg = "T'has rendit."; resultScore = 0; leagueOutcome = 'loss'; 
-    }
-    else if (game.in_checkmate()) {
-        if (game.turn() !== playerColor) { 
-            msg = "Victòria!"; resultScore = 1; playerWon = true; leagueOutcome = 'win'; 
-            sessionStats.gamesWon++; totalWins++;
-            if (playerColor === 'b') sessionStats.blackWins++;
-        } else { msg = "Derrota."; resultScore = 0; leagueOutcome = 'loss'; }
-    } else { msg = "Taules."; resultScore = 0.5; leagueOutcome = 'draw'; }
-        
-    sessionStats.gamesPlayed++; totalGamesPlayed++;
-    
-    if (currentGameMode === 'league') sessionStats.leagueGamesPlayed++;
-    else if (currentGameMode === 'free') sessionStats.freeGamesPlayed++;
-
-    if (finalPrecision >= 70) sessionStats.highPrecisionGames++;
-    if (finalPrecision >= 85) sessionStats.perfectGames++;
-    
-    // LÒGICA DRILLS
-    if (currentGameMode === 'drill') {
-        if (playerWon) {
-            alert("Entrenament completat! 🎉");
-            sessionStats.drillsSolved++;
-            checkMissions();
-            returnToMainMenuImmediate();
-            return;
-        } else {
-            if(confirm("Entrenament fallit. Vols tornar'ho a provar?")) {
-                game.undo(); board.position(game.fen()); return;
-            } else {
-                returnToMainMenuImmediate(); return;
-            }
-        }
-    }
-
-    change = calculateEloDelta(resultScore);
-    msg += ` (${formatEloChange(change)})`;
-
-    if (blunderMode && playerWon && currentBundleFen) { handleBundleSuccess(); return; }
-    
-    userELO = Math.max(50, userELO + change); 
-    updateEloHistory(userELO);
-    
-    if (!blunderMode && currentGameMode !== 'drill') adjustAIDifficulty(playerWon, finalPrecision, resultScore);
-
-    if (wasLeagueMatch && !blunderMode) {
-        applyLeagueAfterGame(leagueOutcome);
-    }
-    
-    const reviewCounts = summarizeReview(currentReview);
-    recordGameHistory(msg, finalPrecision, reviewCounts);    
-    persistReviewSummary(finalPrecision, msg);
-    recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
-    $('#status').text(msg);
-    
-    // Gestió de l'indicador de resultat
-    if (leagueOutcome === 'win') setResultIndicator('win');
-    else if (leagueOutcome === 'loss') setResultIndicator('loss');
-    else setResultIndicator('draw');
-    
-    // Mostrar imatge de checkmate si és escac mat i victòria
-    const showCheckmate = game.in_checkmate() && playerWon;
-    if (showCheckmate) {
-        const checkmateImage = $('#checkmate-image');
-        if (checkmateImage.length) checkmateImage.show();
-    }
-    
-    let reviewHeader = msg;
-    if (currentStreak > 0) reviewHeader += ` · Ratxa ${currentStreak} dies`;
-    
-    // Guardar snapshot per poder reobrir la revisió
-    lastReviewSnapshot = {
-        msg: reviewHeader,
-        finalPrecision: finalPrecision,
-        counts: reviewCounts,
-        showCheckmate: showCheckmate
-    };
-    
-    const onClose = () => {
-        if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
-    };
-    showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
-}
-
-function handleGameOver(manualResign = false) {
-    pendingMoveEvaluation = false;
     let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
     let leagueOutcome = 'draw';
@@ -3014,6 +2921,7 @@ function handleGameOver(manualResign = false) {
     }
     
     const reviewCounts = summarizeReview(currentReview);
+    recordGameHistory(msg, finalPrecision, reviewCounts);
     persistReviewSummary(finalPrecision, msg);
     recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
     $('#status').text(msg);
