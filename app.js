@@ -1962,7 +1962,7 @@ function splitTvPgnBlocks(pgnText) {
     if (!pgnText) return [];
     const normalized = pgnText.replace(/\r\n/g, '\n').trim();
     if (!normalized) return [];
-    const blocks = normalized.split(/\n(?=\\[Event\\s)/g);
+    const blocks = normalized.split(/\n(?=\[Event\s)/g);
     return blocks.map(block => block.trim()).filter(Boolean);
 }
 
