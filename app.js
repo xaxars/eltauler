@@ -24,6 +24,8 @@ let reviewOpenDelayTimer = null;
 let gameHistory = [];
 let historyBoard = null;
 let historyReplay = null;
+let tvBoard = null;
+let tvReplay = null;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -1569,6 +1571,42 @@ function formatHistoryMode(mode) {
     return 'Partida';
 }
 
+const TV_GAME_POOL = [
+    {
+        id: 'elo2800-ruy',
+        white: 'Magnus Carlsen',
+        black: 'Ian Nepomniachtchi',
+        whiteElo: 2882,
+        blackElo: 2835,
+        event: 'Lichess Open Database',
+        date: '2024.06.12',
+        result: '*',
+        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-ruy"]\n[Date "2024.06.12"]\n[White "Magnus Carlsen"]\n[Black "Ian Nepomniachtchi"]\n[WhiteElo "2882"]\n[BlackElo "2835"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 *`
+    },
+    {
+        id: 'elo2800-qg',
+        white: 'Fabiano Caruana',
+        black: 'Ding Liren',
+        whiteElo: 2815,
+        blackElo: 2806,
+        event: 'Lichess Open Database',
+        date: '2024.05.18',
+        result: '*',
+        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-qg"]\n[Date "2024.05.18"]\n[White "Fabiano Caruana"]\n[Black "Ding Liren"]\n[WhiteElo "2815"]\n[BlackElo "2806"]\n[Result "*"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 exd5 9. Bd3 Bb7 10. O-O Nbd7 *`
+    },
+    {
+        id: 'elo2800-sicilian',
+        white: 'Hikaru Nakamura',
+        black: 'Alireza Firouzja',
+        whiteElo: 2824,
+        blackElo: 2804,
+        event: 'Lichess Open Database',
+        date: '2024.04.02',
+        result: '*',
+        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-sicilian"]\n[Date "2024.04.02"]\n[White "Hikaru Nakamura"]\n[Black "Alireza Firouzja"]\n[WhiteElo "2824"]\n[BlackElo "2804"]\n[Result "*"]\n\n1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. f3 b5 8. Qd2 Nbd7 9. g4 Bb7 10. O-O-O b4 *`
+    }
+];
+
 function stopHistoryPlayback() {
     if (historyReplay && historyReplay.timer) {
         clearInterval(historyReplay.timer);
@@ -1699,6 +1737,171 @@ function startHistoryPlayback() {
     }, 900);
 }
 
+function stopTvPlayback() {
+    if (tvReplay && tvReplay.timer) {
+        clearInterval(tvReplay.timer);
+        tvReplay.timer = null;
+    }
+    if (tvReplay) tvReplay.isPlaying = false;
+    updateTvControls();
+}
+
+function updateTvControls() {
+    const playBtn = $('#tv-play');
+    const pauseBtn = $('#tv-pause');
+    const prevBtn = $('#tv-prev');
+    const nextBtn = $('#tv-next');
+    const hasEntry = tvReplay && tvReplay.moves;
+    const movesCount = hasEntry ? tvReplay.moves.length : 0;
+    const atStart = !hasEntry || tvReplay.moveIndex === 0;
+    const atEnd = !hasEntry || tvReplay.moveIndex >= movesCount;
+
+    playBtn.prop('disabled', !hasEntry || movesCount === 0 || tvReplay.isPlaying || atEnd);
+    pauseBtn.prop('disabled', !hasEntry || !tvReplay.isPlaying);
+    prevBtn.prop('disabled', !hasEntry || atStart || tvReplay.isPlaying);
+    nextBtn.prop('disabled', !hasEntry || atEnd || tvReplay.isPlaying);
+    updateTvEndActions();
+}
+
+function updateTvProgress() {
+    const progress = $('#tv-progress');
+    if (!tvReplay || !tvReplay.moves) {
+        progress.text('0/0');
+        return;
+    }
+    progress.text(`${tvReplay.moveIndex}/${tvReplay.moves.length}`);
+}
+
+function updateTvEndActions() {
+    const actions = $('#tv-end-actions');
+    if (!tvReplay || !tvReplay.moves || tvReplay.moves.length === 0) {
+        actions.hide();
+        return;
+    }
+    const atEnd = tvReplay.moveIndex >= tvReplay.moves.length;
+    if (atEnd && !tvReplay.isPlaying) actions.show();
+    else actions.hide();
+}
+
+function updateTvBoard() {
+    if (!tvBoard || !tvReplay || !tvReplay.game) return;
+    tvBoard.position(tvReplay.game.fen(), false);
+    if (typeof tvBoard.resize === 'function') tvBoard.resize();
+    updateTvProgress();
+    updateTvControls();
+}
+
+function initTvBoard() {
+    if (tvBoard) return;
+    const boardEl = document.getElementById('tv-board');
+    if (!boardEl) return;
+    tvBoard = Chessboard('tv-board', {
+        draggable: false,
+        position: 'start',
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    });
+}
+
+function setTvStatus(message, isError = false) {
+    const status = $('#tv-status');
+    status.text(message || '');
+    status.css('color', isError ? 'var(--severity-high)' : 'var(--text-secondary)');
+}
+
+function updateTvDetails(entry) {
+    const resultEl = $('#tv-result');
+    const metaEl = $('#tv-meta');
+    const eloEl = $('#tv-elo');
+    if (!entry) {
+        resultEl.text('—');
+        metaEl.text('Sense dades.');
+        eloEl.text('—');
+        return;
+    }
+    resultEl.text(`${entry.white} vs ${entry.black}`);
+    metaEl.text(`${entry.event} · ${entry.date}`);
+    eloEl.text(`${entry.whiteElo} vs ${entry.blackElo}`);
+}
+
+function loadTvGame(entry) {
+    if (!entry) return;
+    stopTvPlayback();
+    initTvBoard();
+    setTvStatus('Carregant partida...');
+    const pgnGame = new Chess();
+    const loaded = pgnGame.load_pgn(entry.pgn, { sloppy: true });
+    if (!loaded) {
+        tvReplay = null;
+        updateTvDetails(null);
+        updateTvProgress();
+        updateTvControls();
+        setTvStatus('No s’ha pogut carregar la partida.', true);
+        return;
+    }
+    const moves = pgnGame.history();
+    tvReplay = {
+        data: entry,
+        game: new Chess(),
+        moves: moves,
+        moveIndex: 0,
+        timer: null,
+        isPlaying: false
+    };
+    updateTvDetails(entry);
+    updateTvBoard();
+    setTvStatus(`Partida carregada · ${moves.length} jugades.`);
+}
+
+function pickRandomTvGame() {
+    if (!TV_GAME_POOL.length) return null;
+    if (!tvReplay || !tvReplay.data) return TV_GAME_POOL[randInt(0, TV_GAME_POOL.length - 1)];
+    const currentId = tvReplay.data.id;
+    const options = TV_GAME_POOL.filter(entry => entry.id !== currentId);
+    if (!options.length) return TV_GAME_POOL[0];
+    return options[randInt(0, options.length - 1)];
+}
+
+function loadRandomTvGame() {
+    const next = pickRandomTvGame();
+    loadTvGame(next);
+}
+
+function tvStepForward() {
+    if (!tvReplay || !tvReplay.moves || tvReplay.moveIndex >= tvReplay.moves.length) return;
+    const move = tvReplay.moves[tvReplay.moveIndex];
+    tvReplay.game.move(move, { sloppy: true });
+    tvReplay.moveIndex++;
+    updateTvBoard();
+}
+
+function tvStepBack() {
+    if (!tvReplay || !tvReplay.moves || tvReplay.moveIndex <= 0) return;
+    tvReplay.game.undo();
+    tvReplay.moveIndex--;
+    updateTvBoard();
+}
+
+function startTvPlayback() {
+    if (!tvReplay || !tvReplay.moves || tvReplay.moves.length === 0 || tvReplay.isPlaying) return;
+    tvReplay.isPlaying = true;
+    updateTvControls();
+    tvReplay.timer = setInterval(() => {
+        if (tvReplay.moveIndex >= tvReplay.moves.length) {
+            stopTvPlayback();
+            return;
+        }
+        tvStepForward();
+    }, 900);
+}
+
+function resetTvReplay() {
+    if (!tvReplay || !tvReplay.moves) return;
+    stopTvPlayback();
+    tvReplay.game = new Chess();
+    tvReplay.moveIndex = 0;
+    updateTvBoard();
+}
+
 function renderGameHistory() {
     const container = $('#history-list');
     if (!container.length) return;
@@ -1734,6 +1937,7 @@ function renderGameHistory() {
         const entry = gameHistory.find(item => item.id === id);
         loadHistoryEntry(entry);
     });
+        stopTvPlayback();
     $('.history-review').off('click').on('click', function() {
         const id = $(this).data('history-id');
         const entry = gameHistory.find(item => item.id === id);
@@ -1812,6 +2016,8 @@ function setupEvents() {
     $('#btn-tv').click(() => {
         $('#start-screen').hide();
         $('#tv-screen').show();
+        initTvBoard();
+        loadRandomTvGame();
     });
     
     $('#btn-league').click(() => { openLeague(); });
@@ -1832,6 +2038,8 @@ function setupEvents() {
         $('#start-screen').show();
     });
     $('#btn-back-tv').click(() => {
+        stopTvPlayback();
+        stopTvPlayback();
         $('#tv-screen').hide();
         $('#start-screen').show();
     });
@@ -1840,6 +2048,17 @@ function setupEvents() {
     $('#history-pause').off('click').on('click', () => { stopHistoryPlayback(); });
     $('#history-prev').off('click').on('click', () => { historyStepBack(); });
     $('#history-next').off('click').on('click', () => { historyStepForward(); });
+    $('#tv-play').off('click').on('click', () => { startTvPlayback(); });
+    $('#tv-pause').off('click').on('click', () => { stopTvPlayback(); });
+    $('#tv-prev').off('click').on('click', () => { tvStepBack(); });
+    $('#tv-next').off('click').on('click', () => { tvStepForward(); });
+    $('#tv-next-game').off('click').on('click', () => { loadRandomTvGame(); });
+    $('#tv-restart').off('click').on('click', () => { resetTvReplay(); });
+    $('#tv-menu').off('click').on('click', () => {
+        stopTvPlayback();
+        $('#tv-screen').hide();
+        $('#start-screen').show();
+    });
 
     $('#result-indicator').off('click').on('click', () => {
         if (!lastReviewSnapshot) return;
