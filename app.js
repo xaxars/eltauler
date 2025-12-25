@@ -1610,6 +1610,7 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.06.12',
         result: '*',
+        pgnUrl: 'https://lichess.org/open/elo2800-ruy.pgn',
         pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-ruy"]\n[Date "2024.06.12"]\n[White "Magnus Carlsen"]\n[Black "Ian Nepomniachtchi"]\n[WhiteElo "2882"]\n[BlackElo "2835"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 *`
     },
     {
@@ -1621,6 +1622,7 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.05.18',
         result: '*',
+        pgnUrl: 'https://lichess.org/open/elo2800-qg.pgn',
         pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-qg"]\n[Date "2024.05.18"]\n[White "Fabiano Caruana"]\n[Black "Ding Liren"]\n[WhiteElo "2815"]\n[BlackElo "2806"]\n[Result "*"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 exd5 9. Bd3 Bb7 10. O-O Nbd7 *`
     },
     {
@@ -1632,6 +1634,7 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.04.02',
         result: '*',
+        pgnUrl: 'https://lichess.org/open/elo2800-sicilian.pgn',
         pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-sicilian"]\n[Date "2024.04.02"]\n[White "Hikaru Nakamura"]\n[Black "Alireza Firouzja"]\n[WhiteElo "2824"]\n[BlackElo "2804"]\n[Result "*"]\n\n1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. f3 b5 8. Qd2 Nbd7 9. g4 Bb7 10. O-O-O b4 *`
     }
 ];
@@ -1859,13 +1862,29 @@ function updateTvDetails(entry) {
     blackEl.text(entry.black || '—');
 }
 
-function loadTvGame(entry) {
+async function fetchTvPgn(entry) {
+    if (!entry) return '';
+    if (!entry.pgnUrl) return entry.pgn || '';
+    try {
+        const response = await fetch(entry.pgnUrl, {
+            headers: { 'Accept': 'application/x-chess-pgn' }
+        });
+        if (!response.ok) throw new Error('PGN fetch failed');
+        const text = await response.text();
+        return text.trim() || entry.pgn || '';
+    } catch (err) {
+        return entry.pgn || '';
+    }
+}
+
+async function loadTvGame(entry) {
     if (!entry) return;
     stopTvPlayback();
     initTvBoard();
     setTvStatus('Carregant partida...');
+    const pgnText = await fetchTvPgn(entry);
     const pgnGame = new Chess();
-    const loaded = pgnGame.load_pgn(entry.pgn, { sloppy: true });
+    const loaded = pgnGame.load_pgn(pgnText, { sloppy: true });
     if (!loaded) {
         tvReplay = null;
         updateTvDetails(null);
@@ -1897,9 +1916,9 @@ function pickRandomTvGame() {
     return options[randInt(0, options.length - 1)];
 }
 
-function loadRandomTvGame() {
+async function loadRandomTvGame() {
     const next = pickRandomTvGame();
-    loadTvGame(next);
+    await loadTvGame(next);
 }
 
 function tvStepForward() {
@@ -2053,7 +2072,7 @@ function setupEvents() {
         $('#start-screen').hide();
         $('#tv-screen').show();
         initTvBoard();
-        loadRandomTvGame();
+        void loadRandomTvGame();
         setTimeout(() => { resizeTvBoardToViewport(); }, 0);
     });
     
@@ -2089,7 +2108,7 @@ function setupEvents() {
     $('#tv-pause').off('click').on('click', () => { stopTvPlayback(); });
     $('#tv-prev').off('click').on('click', () => { tvStepBack(); });
     $('#tv-next').off('click').on('click', () => { tvStepForward(); });
-    $('#tv-next-game').off('click').on('click', () => { loadRandomTvGame(); });
+    $('#tv-next-game').off('click').on('click', () => { void loadRandomTvGame(); });
     $('#tv-restart').off('click').on('click', () => { resetTvReplay(); });
     $('#tv-menu').off('click').on('click', () => {
         stopTvPlayback();
