@@ -1929,8 +1929,7 @@ function setupEvents() {
             saveStorage(); generateDailyMissions(); updateDisplay();
             $('#stats-screen').hide(); $('#start-screen').show(); $('#confirm-delete-panel').hide();
             alert('Totes les dades han estat esborrades. Comença de nou!');
-        }
-          });
+        });
     
     $('#btn-hint').click(() => {
         if (!stockfish && !ensureStockfish()) { $('#status').text("Motor Stockfish no disponible").css('color', '#c62828'); return; }
