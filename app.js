@@ -1610,8 +1610,7 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.06.12',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-ruy.pgn',
-        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-ruy"]\n[Date "2024.06.12"]\n[White "Magnus Carlsen"]\n[Black "Ian Nepomniachtchi"]\n[WhiteElo "2882"]\n[BlackElo "2835"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3 Nb8 10. d4 Nbd7 *`
+        pgnUrl: 'https://lichess.org/open/elo2800-ruy.pgn'
     },
     {
         id: 'elo2800-qg',
@@ -1622,8 +1621,7 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.05.18',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-qg.pgn',
-        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-qg"]\n[Date "2024.05.18"]\n[White "Fabiano Caruana"]\n[Black "Ding Liren"]\n[WhiteElo "2815"]\n[BlackElo "2806"]\n[Result "*"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 exd5 9. Bd3 Bb7 10. O-O Nbd7 *`
+        pgnUrl: 'https://lichess.org/open/elo2800-qg.pgn'
     },
     {
         id: 'elo2800-sicilian',
@@ -1634,10 +1632,11 @@ const TV_GAME_POOL = [
         event: 'Lichess Open Database',
         date: '2024.04.02',
         result: '*',
-        pgnUrl: 'https://lichess.org/open/elo2800-sicilian.pgn',
-        pgn: `[Event "Lichess Open Database"]\n[Site "https://lichess.org/open/elo2800-sicilian"]\n[Date "2024.04.02"]\n[White "Hikaru Nakamura"]\n[Black "Alireza Firouzja"]\n[WhiteElo "2824"]\n[BlackElo "2804"]\n[Result "*"]\n\n1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. Be3 e6 7. f3 b5 8. Qd2 Nbd7 9. g4 Bb7 10. O-O-O b4 *`
+        pgnUrl: 'https://lichess.org/open/elo2800-sicilian.pgn'    
     }
 ];
+
+const MIN_TV_MOVES = 21;
 
 function stopHistoryPlayback() {
     if (historyReplay && historyReplay.timer) {
@@ -1864,16 +1863,16 @@ function updateTvDetails(entry) {
 
 async function fetchTvPgn(entry) {
     if (!entry) return '';
-    if (!entry.pgnUrl) return entry.pgn || '';
+    if (!entry.pgnUrl) return '';
     try {
         const response = await fetch(entry.pgnUrl, {
             headers: { 'Accept': 'application/x-chess-pgn' }
         });
         if (!response.ok) throw new Error('PGN fetch failed');
         const text = await response.text();
-        return text.trim() || entry.pgn || '';
+        return text.trim() || '';
     } catch (err) {
-        return entry.pgn || '';
+        return '';
     }
 }
 
@@ -1891,9 +1890,17 @@ async function loadTvGame(entry) {
         updateTvProgress();
         updateTvControls();
         setTvStatus('No s’ha pogut carregar la partida.', true);
-        return;
+       return false;
     }
     const moves = pgnGame.history();
+    if (moves.length < MIN_TV_MOVES) {
+        tvReplay = null;
+        updateTvDetails(null);
+        updateTvProgress();
+        updateTvControls();
+        setTvStatus('Partida massa curta per TV.', true);
+        return false;
+    }
     tvReplay = {
         data: entry,
         game: new Chess(),
@@ -1905,6 +1912,7 @@ async function loadTvGame(entry) {
     updateTvDetails(entry);
     updateTvBoard();
     setTvStatus(`Partida carregada · ${moves.length} jugades.`);
+    return true;
 }
 
 function pickRandomTvGame() {
@@ -1917,8 +1925,12 @@ function pickRandomTvGame() {
 }
 
 async function loadRandomTvGame() {
-    const next = pickRandomTvGame();
-    await loadTvGame(next);
+    const attempts = TV_GAME_POOL.length || 1;
+    for (let i = 0; i < attempts; i++) {
+        const next = pickRandomTvGame();
+        const ok = await loadTvGame(next);
+        if (ok) return;
+    }
 }
 
 function tvStepForward() {
