@@ -349,7 +349,41 @@
             color: #222;
             border-color: #cfcfcf;
             box-shadow: none;
-        }      
+        }
+        .tv-players {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .tv-player {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(0,0,0,0.25);
+        }
+        .tv-player strong { color: var(--text-primary); }
+        .tv-player .tv-chip {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+        }
+        .tv-player.white .tv-chip { background: #f5f5f5; }
+        .tv-player.black .tv-chip { background: #1c1c1c; }
+        body.epaper-mode .tv-player {
+            background: #ededed;
+            border-color: #cfcfcf;
+            color: #333;
+        }
+        body.epaper-mode .tv-player strong { color: #111; }     
         
         /* BUTTONS */
         .menu-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
@@ -685,7 +719,14 @@
             text-align: center;
             font-size: 0.8rem;
             color: var(--text-secondary);
-        }      
+        }
+        .tv-section .history-board {
+            max-width: 520px;
+        }
+        body.device-mobile .tv-section .history-board {
+            max-width: none;
+            width: 100%;
+        }     
                 .tv-section {
             margin-top: 18px;
         }
@@ -1220,6 +1261,10 @@
                             <div class="history-detail-title" id="tv-result">—</div>
                             <div class="history-detail-meta" id="tv-meta">Carregant partida...</div>
                             <div class="history-detail-meta">ELO: <strong id="tv-elo">—</strong></div>
+                            <div class="tv-players" id="tv-players">
+                                <div class="tv-player white"><span class="tv-chip"></span>Blanques: <strong id="tv-white-player">—</strong></div>
+                                <div class="tv-player black"><span class="tv-chip"></span>Negres: <strong id="tv-black-player">—</strong></div>
+                            </div>               
                         </div>
                         <div class="history-board">
                             <div id="tv-board"></div>
