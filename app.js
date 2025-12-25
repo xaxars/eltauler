@@ -2026,10 +2026,6 @@ function setupEvents() {
         showResignModal();
     });
 
-    $('#btn-resign-float').click(() => {
-        showResignModal();
-    });
-
     $('#btn-resign-confirm').click(() => {
         hideResignModal();
         handleGameOver(true);
