@@ -1617,7 +1617,8 @@ function initHistoryBoard() {
     if (!boardEl) return;
     historyBoard = Chessboard('history-board', {
         draggable: false,
-        position: 'start'
+        position: 'start',
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
 }
 
@@ -1719,7 +1720,10 @@ function renderGameHistory() {
                         <div class="history-item-title">${entry.result || '—'}</div>
                         <div class="history-item-meta">${meta}</div>
                     </div>
-                    <button class="btn btn-secondary history-select" data-history-id="${entry.id}">▶️ Veure</button>
+                           <div class="history-item-actions">
+                        <button class="btn btn-secondary history-select" data-history-id="${entry.id}">▶️ Veure</button>
+                        <button class="btn btn-primary history-review" data-history-id="${entry.id}">📈 Revisió</button>
+                    </div>
                 </div>
             `;
         })
@@ -1730,9 +1734,25 @@ function renderGameHistory() {
         const entry = gameHistory.find(item => item.id === id);
         loadHistoryEntry(entry);
     });
+    $('.history-review').off('click').on('click', function() {
+        const id = $(this).data('history-id');
+        const entry = gameHistory.find(item => item.id === id);
+        showHistoryReview(entry);
+    });
     if (!historyReplay || !historyReplay.entry) {
         loadHistoryEntry(gameHistory[gameHistory.length - 1]);
     }
+}
+
+function showHistoryReview(entry) {
+    if (!entry) return;
+    currentGameErrors = Array.isArray(entry.errors)
+        ? entry.errors.map(err => ({ fen: err.fen, severity: err.severity }))
+        : [];
+    const msg = entry.result || 'Partida';
+    const precision = typeof entry.precision === 'number' ? entry.precision : 0;
+    const counts = entry.counts || { excel: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    showPostGameReview(msg, precision, counts, null, { showCheckmate: false });
 }
 
 function recordGameHistory(resultLabel, finalPrecision, counts) {
@@ -1748,6 +1768,7 @@ function recordGameHistory(resultLabel, finalPrecision, counts) {
         precision: finalPrecision,
         counts: counts,
         moves: moves,
+        errors: currentGameErrors.map(err => ({ fen: err.fen, severity: err.severity })),
         playerColor: playerColor,
         opponent: currentOpponent || null,
         pgn: game.pgn()
