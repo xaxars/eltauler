@@ -179,6 +179,10 @@ const TV_JEROGLYPHICS_START = 15;
 const TV_JEROGLYPHICS_INTERVAL = 20;
 const TV_JEROGLYPHICS_END_BUFFER = 5;
 let tvJeroglyphicsEnabled = false;
+const BACKUP_DIR_DB = 'eltauler_backup_dir_db';
+const BACKUP_DIR_STORE = 'handles';
+const BACKUP_DIR_KEY = 'backupDir';
+let backupDirHandle = null;
 
 function loadBundleAcceptMode() {
     try {
@@ -221,6 +225,170 @@ function loadTvJeroglyphicsPreference() {
 
 function saveTvJeroglyphicsPreference(enabled) {
     try { localStorage.setItem(TV_JEROGLYPHICS_KEY, enabled ? 'on' : 'off'); } catch (e) {}
+}
+
+function openBackupDirDb() {
+    return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) {
+            reject(new Error('IndexedDB no disponible'));
+            return;
+        }
+        const request = indexedDB.open(BACKUP_DIR_DB, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(BACKUP_DIR_STORE)) {
+                db.createObjectStore(BACKUP_DIR_STORE);
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function loadBackupDirHandle() {
+    try {
+        const db = await openBackupDirDb();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(BACKUP_DIR_STORE, 'readonly');
+            const store = tx.objectStore(BACKUP_DIR_STORE);
+            const req = store.get(BACKUP_DIR_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.warn('No es pot carregar la carpeta de backups', e);
+        return null;
+    }
+}
+
+async function saveBackupDirHandle(handle) {
+    try {
+        const db = await openBackupDirDb();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(BACKUP_DIR_STORE, 'readwrite');
+            const store = tx.objectStore(BACKUP_DIR_STORE);
+            const req = store.put(handle, BACKUP_DIR_KEY);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.warn('No es pot guardar la carpeta de backups', e);
+    }
+}
+
+function supportsDirectoryPicker() {
+    return 'showDirectoryPicker' in window;
+}
+
+function supportsFilePicker() {
+    return 'showOpenFilePicker' in window;
+}
+
+async function verifyHandlePermission(handle, mode = 'readwrite') {
+    if (!handle || !handle.queryPermission) return 'granted';
+    let status = await handle.queryPermission({ mode });
+    if (status === 'prompt' && handle.requestPermission) {
+        status = await handle.requestPermission({ mode });
+    }
+    return status;
+}
+
+async function ensureBackupDirHandle({ prompt = false, mode = 'readwrite' } = {}) {
+    if (!backupDirHandle) {
+        backupDirHandle = await loadBackupDirHandle();
+    }
+    if (backupDirHandle) {
+        const status = await verifyHandlePermission(backupDirHandle, mode);
+        if (status === 'granted') return backupDirHandle;
+    }
+    if (!prompt || !supportsDirectoryPicker()) return null;
+    try {
+        const handle = await window.showDirectoryPicker({ id: 'eltauler-backups', mode });
+        backupDirHandle = handle;
+        await saveBackupDirHandle(handle);
+        if (navigator.storage && navigator.storage.persist) {
+            await navigator.storage.persist();
+        }
+        return handle;
+    } catch (e) {
+        console.log('Selecció de carpeta cancel·lada');
+        return null;
+    }
+}
+
+async function writeBackupToDirectory(data, filename, { prompt = true } = {}) {
+    const handle = await ensureBackupDirHandle({ prompt, mode: 'readwrite' });
+    if (!handle) return null;
+    const fileHandle = await handle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    return fileHandle;
+}
+
+async function importBackupFromPicker() {
+    const handle = await ensureBackupDirHandle({ prompt: true, mode: 'read' });
+    if (!handle || !supportsFilePicker()) return null;
+    try {
+        const [fileHandle] = await window.showOpenFilePicker({
+            startIn: handle,
+            multiple: false,
+            types: [{ description: 'Backup El Tauler', accept: { 'application/json': ['.json'] } }]
+        });
+        return await fileHandle.getFile();
+    } catch (e) {
+        console.log('Importació cancel·lada');
+        return null;
+    }
+}
+
+function buildBackupData({ includeGameHistory = false } = {}) {
+    const base = {
+        elo: userELO, bundles: savedErrors, streak: currentStreak, lastPracticeDate: lastPracticeDate,
+        totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
+        sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed,
+        totalWins: totalWins, maxStreak: maxStreak,
+        aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins,
+        consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
+        reviewHistory: reviewHistory, date: new Date().toLocaleDateString()
+    };
+    if (includeGameHistory) base.gameHistory = gameHistory;
+    return base;
+}
+
+function importBackupData(data) {
+    if (!data || typeof data !== 'object') return;
+    userELO = data.elo || 50; savedErrors = data.bundles || [];
+    currentStreak = data.streak || 0; lastPracticeDate = data.lastPracticeDate || null;
+    totalStars = data.totalStars || 0; unlockedBadges = data.unlockedBadges || [];
+    todayMissions = restoreMissions(data.todayMissions || []); missionsDate = data.missionsDate || null;
+    sessionStats = data.sessionStats || { 
+        gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
+        bundlesSolvedLow: 0, bundlesSolvedMed: 0, bundlesSolvedHigh: 0,
+        highPrecisionGames: 0, perfectGames: 0, blackWins: 0,
+        leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
+    };
+    eloHistory = data.eloHistory || []; totalGamesPlayed = data.totalGamesPlayed || 0; totalWins = data.totalWins || 0; maxStreak = data.maxStreak || 0;
+    adaptiveLevel = clampAdaptiveLevel(typeof data.adaptiveLevel === 'number' ? data.adaptiveLevel : difficultyToLevel(data.aiDifficulty || 8));
+    aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
+    currentLeague = data.currentLeague || null;
+    leagueActiveMatch = data.leagueActiveMatch || null;
+    reviewHistory = data.reviewHistory || [];
+    gameHistory = data.gameHistory || [];
+    saveStorage(); updateDisplay(); alert('Dades importades!');
+}
+
+async function handleBackupImportFile(file) {
+    if (!file) return;
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (confirm(`Importar dades? ELO: ${data.elo || 50}, Estrelles: ${data.totalStars || 0}`)) {
+            importBackupData(data);
+        }
+    } catch (err) {
+        alert('Error llegint l\'arxiu');
+    }
 }
 
 function applyTvJeroglyphicsMode(enabled, options = {}) {
@@ -2757,7 +2925,7 @@ function recordGameHistory(resultLabel, finalPrecision, counts) {
 }
 
 function checkShareSupport() {
-    if (navigator.canShare && navigator.share) $('#btn-smart-share').show();
+    if ((navigator.canShare && navigator.share) || supportsDirectoryPicker()) $('#btn-smart-share').show();
 }
 
 function setupEvents() {
@@ -2918,17 +3086,16 @@ function setupEvents() {
     });
 
     $('#btn-smart-share').click(async () => {
-        const data = {
-            elo: userELO, bundles: savedErrors, streak: currentStreak, lastPracticeDate: lastPracticeDate,
-            totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
-            sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed, 
-            totalWins: totalWins, maxStreak: maxStreak,
-            aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins, 
-            consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
-            reviewHistory: reviewHistory, date: new Date().toLocaleDateString()
-        };
+   const data = buildBackupData();
+        const filename = `eltauler_backup_${totalStars}stars.json`;
+        if (supportsDirectoryPicker()) {
+            const savedFile = await writeBackupToDirectory(data, filename);
+            if (savedFile) {
+                alert('Backup guardat a la carpeta seleccionada.');
+            }
+        }
         const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-        const file = new File([blob], `eltauler_backup_${totalStars}stars.json`, { type: 'application/json' });
+        const file = new File([blob], filename, { type: 'application/json' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             try { await navigator.share({ files: [file], title: 'El Tauler - Progrés', text: `ELO: ${userELO} | ★${totalStars}` }); } 
             catch (e) { console.log('Cancel·lat'); }
@@ -2936,51 +3103,46 @@ function setupEvents() {
     });
 
     $('#btn-export').click(() => {
-        const data = {
-            elo: userELO, bundles: savedErrors, streak: currentStreak, lastPracticeDate: lastPracticeDate,
-            totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
-            sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed,
-            totalWins: totalWins, maxStreak: maxStreak,
-            aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins,
-            consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
-            reviewHistory: reviewHistory, gameHistory: gameHistory, date: new Date().toLocaleDateString()
-        };
+             const data = buildBackupData({ includeGameHistory: true });
+        const filename = `eltauler_backup_${totalStars}stars.json`;
+        if (supportsDirectoryPicker()) {
+            writeBackupToDirectory(data, filename, { prompt: false })
+                .then((savedFile) => {
+                    if (savedFile) {
+                        alert('Backup guardat a la carpeta seleccionada.');
+                        return;
+                    }
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+                    URL.revokeObjectURL(url);
+                })
+                .catch(() => {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+                    URL.revokeObjectURL(url);
+                });
+            return;
+        }        
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `eltauler_backup_${totalStars}stars.json`; a.click();
+        const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
     });
 
-    $('#btn-import').click(() => $('#file-input').click());
-    $('#file-input').change((e) => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                if (confirm(`Importar dades? ELO: ${data.elo || 50}, Estrelles: ${data.totalStars || 0}`)) {
-                    userELO = data.elo || 50; savedErrors = data.bundles || [];
-                    currentStreak = data.streak || 0; lastPracticeDate = data.lastPracticeDate || null;
-                    totalStars = data.totalStars || 0; unlockedBadges = data.unlockedBadges || [];
-                    todayMissions = restoreMissions(data.todayMissions || []); missionsDate = data.missionsDate || null;
-                    sessionStats = data.sessionStats || { 
-                        gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
-                        bundlesSolvedLow: 0, bundlesSolvedMed: 0, bundlesSolvedHigh: 0,
-                        highPrecisionGames: 0, perfectGames: 0, blackWins: 0,
-                        leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
-                    };
-                    eloHistory = data.eloHistory || []; totalGamesPlayed = data.totalGamesPlayed || 0; totalWins = data.totalWins || 0; maxStreak = data.maxStreak || 0;
-                    adaptiveLevel = clampAdaptiveLevel(typeof data.adaptiveLevel === 'number' ? data.adaptiveLevel : difficultyToLevel(data.aiDifficulty || 8));
-                    aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
-                    currentLeague = data.currentLeague || null;
-                    leagueActiveMatch = data.leagueActiveMatch || null;
-                    reviewHistory = data.reviewHistory || [];
-                    gameHistory = data.gameHistory || [];
-                    saveStorage(); updateDisplay(); alert('Dades importades!');
-                }
-            } catch (err) { alert('Error llegint l\'arxiu'); }
-        };
-        reader.readAsText(file);
+      $('#btn-import').click(async () => {
+        const file = await importBackupFromPicker();
+        if (file) {
+            await handleBackupImportFile(file);
+            return;
+        }
+        $('#file-input').click();
+    });
+    $('#file-input').change(async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await handleBackupImportFile(file);
     });
 
     // Click per desfer
@@ -4209,6 +4371,7 @@ $('#btn-dismiss-install').on('click', () => {
 $(document).ready(() => {
     updateDeviceType();
     loadStorage();
+    void ensureBackupDirHandle({ prompt: false, mode: 'readwrite' });
     applyEpaperMode(loadEpaperPreference(), { skipSave: true });
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
     applyTvJeroglyphicsMode(loadTvJeroglyphicsPreference(), { skipSave: true });
