@@ -26,6 +26,14 @@ let historyBoard = null;
 let historyReplay = null;
 let tvBoard = null;
 let tvReplay = null;
+let tvJeroglyphicsActive = false;
+let tvJeroglyphicsAnalyzing = false;
+let tvJeroglyphicsHinting = false;
+let tvJeroglyphicsTopMoves = [];
+let tvJeroglyphicsPvMoves = {};
+let tvJeroglyphicsTargetIndex = null;
+let tvJeroglyphicsActualMove = null;
+let tvJeroglyphicsResumePlayback = false;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -157,6 +165,11 @@ let bundleAcceptMode = 'top2'; // 'top2' o 'any'
 
 const EPAPER_MODE_KEY = 'eltauler_epaper_mode';
 let epaperEnabled = false;
+const TV_JEROGLYPHICS_KEY = 'eltauler_tv_jeroglyphics';
+const TV_JEROGLYPHICS_START = 15;
+const TV_JEROGLYPHICS_INTERVAL = 20;
+const TV_JEROGLYPHICS_END_BUFFER = 5;
+let tvJeroglyphicsEnabled = false;
 
 function loadBundleAcceptMode() {
     try {
@@ -190,6 +203,26 @@ function applyEpaperMode(enabled, options = {}) {
     if (!options.skipSave) saveEpaperPreference(epaperEnabled);
     if (eloChart) updateEloChart();
     if (reviewChart) updateReviewChart();
+}
+
+function loadTvJeroglyphicsPreference() {
+    try { return localStorage.getItem(TV_JEROGLYPHICS_KEY) === 'on'; }
+    catch (e) { return false; }
+}
+
+function saveTvJeroglyphicsPreference(enabled) {
+    try { localStorage.setItem(TV_JEROGLYPHICS_KEY, enabled ? 'on' : 'off'); } catch (e) {}
+}
+
+function applyTvJeroglyphicsMode(enabled, options = {}) {
+    tvJeroglyphicsEnabled = !!enabled;
+    const toggle = document.getElementById('tv-jeroglyphics-toggle');
+    if (toggle) toggle.checked = tvJeroglyphicsEnabled;
+    if (!options.skipSave) saveTvJeroglyphicsPreference(tvJeroglyphicsEnabled);
+    if (!tvJeroglyphicsEnabled && tvJeroglyphicsActive) {
+        cancelTvJeroglyphics('Jeroglífics desactivats.');
+    }
+    updateTvControls();
 }
 
 // Estat de validació Top-2 al Bundle
@@ -1892,15 +1925,19 @@ function updateTvControls() {
     const pauseBtn = $('#tv-pause');
     const prevBtn = $('#tv-prev');
     const nextBtn = $('#tv-next');
+    const hintBtn = $('#tv-hint');
     const hasEntry = tvReplay && tvReplay.moves;
     const movesCount = hasEntry ? tvReplay.moves.length : 0;
     const atStart = !hasEntry || tvReplay.moveIndex === 0;
     const atEnd = !hasEntry || tvReplay.moveIndex >= movesCount;
 
-    playBtn.prop('disabled', !hasEntry || movesCount === 0 || tvReplay.isPlaying || atEnd);
-    pauseBtn.prop('disabled', !hasEntry || !tvReplay.isPlaying);
-    prevBtn.prop('disabled', !hasEntry || atStart || tvReplay.isPlaying);
-    nextBtn.prop('disabled', !hasEntry || atEnd || tvReplay.isPlaying);
+    const lockedByPuzzle = tvJeroglyphicsActive || tvJeroglyphicsAnalyzing;
+
+    playBtn.prop('disabled', !hasEntry || movesCount === 0 || tvReplay.isPlaying || atEnd || lockedByPuzzle);
+    pauseBtn.prop('disabled', !hasEntry || !tvReplay.isPlaying || lockedByPuzzle);
+    prevBtn.prop('disabled', !hasEntry || atStart || tvReplay.isPlaying || lockedByPuzzle);
+    nextBtn.prop('disabled', !hasEntry || atEnd || tvReplay.isPlaying || lockedByPuzzle);
+    hintBtn.prop('disabled', !tvJeroglyphicsActive);
     updateTvEndActions();
 }
 
@@ -1928,6 +1965,7 @@ function updateTvBoard() {
     if (!tvBoard || !tvReplay || !tvReplay.game) return;
     tvBoard.position(tvReplay.game.fen(), false);
     resizeTvBoardToViewport();
+    clearTvHintHighlight();   
     updateTvProgress();
     updateTvControls();
 }
@@ -1937,11 +1975,54 @@ function initTvBoard() {
     const boardEl = document.getElementById('tv-board');
     if (!boardEl) return;
     tvBoard = Chessboard('tv-board', {
-        draggable: false,
+        draggable: true,
         position: 'start',
+        onDragStart: tvOnDragStart,
+        onDrop: tvOnDrop,
+        onSnapEnd: tvOnSnapEnd,      
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
     resizeTvBoardToViewport();
+}
+
+function clearTvHintHighlight() {
+    $('#tv-board .square-55d63').removeClass('highlight-hint');
+}
+
+function highlightTvHintSquare(square) {
+    clearTvHintHighlight();
+    if (!square) return;
+    $(`#tv-board .square-55d63[data-square='${square}']`).addClass('highlight-hint');
+}
+
+function tvOnDragStart(source, piece) {
+    if (!tvJeroglyphicsActive || tvJeroglyphicsAnalyzing) return false;
+    if (!tvReplay || !tvReplay.game) return false;
+    if ((tvReplay.game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+        (tvReplay.game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+}
+
+function tvOnDrop(source, target) {
+    if (!tvJeroglyphicsActive || !tvReplay || !tvReplay.game) return 'snapback';
+    clearTvHintHighlight();
+    const testGame = new Chess(tvReplay.game.fen());
+    const move = testGame.move({ from: source, to: target, promotion: 'q' });
+    if (!move) return 'snapback';
+    const uci = move.from + move.to + (move.promotion ? move.promotion : '');
+    const accepted = tvJeroglyphicsTopMoves.filter(Boolean);
+    const ok = accepted.length > 0 && accepted.includes(uci);
+    if (ok) {
+        setTvStatus('Correcte! Continuant la partida...');
+    } else {
+        setTvStatus('No és una de les dues millors opcions. Continuant la partida...');
+    }
+    finishTvJeroglyphics(ok);
+    return 'snapback';
+}
+
+function tvOnSnapEnd() {
+    if (!tvBoard || !tvReplay || !tvReplay.game) return;
+    tvBoard.position(tvReplay.game.fen(), false);
 }
 
 function setTvStatus(message, isError = false) {
@@ -1969,6 +2050,18 @@ function updateTvDetails(entry) {
     eloEl.text(`${entry.whiteElo} vs ${entry.blackElo}`);
     whiteEl.text(entry.white || '—');
     blackEl.text(entry.black || '—');
+}
+
+function resetTvJeroglyphicsState() {
+    tvJeroglyphicsActive = false;
+    tvJeroglyphicsAnalyzing = false;
+    tvJeroglyphicsHinting = false;
+    tvJeroglyphicsTopMoves = [];
+    tvJeroglyphicsPvMoves = {};
+    tvJeroglyphicsTargetIndex = null;
+    tvJeroglyphicsActualMove = null;
+    tvJeroglyphicsResumePlayback = false;
+    clearTvHintHighlight();
 }
 
 async function fetchTvPgn(entry) {
@@ -2213,7 +2306,8 @@ async function fetchLichessDbGameByElo(targetElo) {
 async function loadTvGame(entry) {
     if (!entry) return;
     stopTvPlayback();
-    initTvBoard();
+    resetTvJeroglyphicsState();      
+    initTvBoard();  
     setTvStatus('Carregant partida...');
     const rawPgnText = await fetchTvPgn(entry);
     let pgnText = selectTvPgn(rawPgnText);
@@ -2327,8 +2421,94 @@ async function loadRandomTvGame() {
     }
 }
 
+function shouldTriggerTvJeroglyphics() {
+    if (!tvJeroglyphicsEnabled || tvJeroglyphicsActive || tvJeroglyphicsAnalyzing) return false;
+    if (!tvReplay || !tvReplay.moves) return false;
+    const moveIndex = tvReplay.moveIndex || 0;
+    if (moveIndex < TV_JEROGLYPHICS_START) return false;
+    if ((moveIndex - TV_JEROGLYPHICS_START) % TV_JEROGLYPHICS_INTERVAL !== 0) return false;
+    const remaining = tvReplay.moves.length - moveIndex;
+    return remaining > TV_JEROGLYPHICS_END_BUFFER;
+}
+
+function startTvJeroglyphics(resumePlayback) {
+    if (!tvReplay || !tvReplay.game) return;
+    if (!stockfish && !ensureStockfish()) {
+        setTvStatus('Motor Stockfish no disponible.', true);
+        return;
+    }
+    tvJeroglyphicsActive = true;
+    tvJeroglyphicsAnalyzing = true;
+    tvJeroglyphicsHinting = false;
+    tvJeroglyphicsTopMoves = [];
+    tvJeroglyphicsPvMoves = {};
+    tvJeroglyphicsTargetIndex = tvReplay.moveIndex;
+    tvJeroglyphicsActualMove = tvReplay.moves[tvReplay.moveIndex] || null;
+    tvJeroglyphicsResumePlayback = !!resumePlayback;
+    clearTvHintHighlight();
+    stopTvPlayback();
+    setTvStatus('Jeroglífic: buscant les dues millors jugades...');
+    updateTvControls();
+
+    try { stockfish.postMessage('setoption name MultiPV value 2'); } catch (e) {}
+    stockfish.postMessage(`position fen ${tvReplay.game.fen()}`);
+    stockfish.postMessage('go depth 12');
+}
+
+function finishTvJeroglyphics() {
+    tvJeroglyphicsActive = false;
+    tvJeroglyphicsAnalyzing = false;
+    tvJeroglyphicsHinting = false;
+    clearTvHintHighlight();
+    try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+
+    if (!tvReplay || !tvReplay.game) return;
+    const move = tvJeroglyphicsActualMove;
+    tvJeroglyphicsActualMove = null;
+    if (move) {
+        try {
+            tvReplay.game.move(move, { sloppy: true });
+            tvReplay.moveIndex++;
+            updateTvBoard();
+        } catch (e) {}
+    }
+    if (tvJeroglyphicsResumePlayback && tvReplay && !tvReplay.isPlaying) startTvPlayback();
+}
+
+function cancelTvJeroglyphics(message) {
+    if (message) setTvStatus(message);
+    tvJeroglyphicsResumePlayback = false;
+    finishTvJeroglyphics();
+}
+
+function requestTvJeroglyphicsHint() {
+    if (!tvJeroglyphicsActive || !tvReplay || !tvReplay.game) return;
+    if (tvJeroglyphicsAnalyzing) {
+        setTvStatus('Esperant les millors jugades...');
+        return;
+    }
+    if (tvJeroglyphicsTopMoves.length > 0) {
+        const toSquare = tvJeroglyphicsTopMoves[0].substring(2, 4);
+        highlightTvHintSquare(toSquare);
+        setTvStatus(`Pista: Alguna peça ha d'anar a ${toSquare}`);
+        return;
+    }
+    if (!stockfish && !ensureStockfish()) {
+        setTvStatus('Motor Stockfish no disponible.', true);
+        return;
+    }
+    tvJeroglyphicsHinting = true;
+    setTvStatus('Buscant pista...');
+    stockfish.postMessage(`position fen ${tvReplay.game.fen()}`);
+    stockfish.postMessage('go depth 15');
+}
+
 function tvStepForward() {
     if (!tvReplay || !tvReplay.moves || tvReplay.moveIndex >= tvReplay.moves.length) return;
+    if (shouldTriggerTvJeroglyphics()) {
+        startTvJeroglyphics(tvReplay.isPlaying);
+        return;
+    }   
     const move = tvReplay.moves[tvReplay.moveIndex];
     tvReplay.game.move(move, { sloppy: true });
     tvReplay.moveIndex++;
@@ -2358,6 +2538,7 @@ function startTvPlayback() {
 function resetTvReplay() {
     if (!tvReplay || !tvReplay.moves) return;
     stopTvPlayback();
+    resetTvJeroglyphicsState();
     tvReplay.game = new Chess();
     tvReplay.moveIndex = 0;
     updateTvBoard();
@@ -2515,7 +2696,8 @@ function setupEvents() {
     $('#tv-pause').off('click').on('click', () => { stopTvPlayback(); });
     $('#tv-prev').off('click').on('click', () => { tvStepBack(); });
     $('#tv-next').off('click').on('click', () => { tvStepForward(); });
-    $('#tv-next-game').off('click').on('click', () => { void loadRandomTvGame(); });
+    $('#tv-hint').off('click').on('click', () => { requestTvJeroglyphicsHint(); });   
+    $('#tv-next-game').off('click').on('click', () => { void loadRandomTvGame(); });    
     $('#tv-restart').off('click').on('click', () => { resetTvReplay(); });
     $('#tv-random').off('click').on('click', () => { void loadRandomTvGame(); });    
     $('#tv-menu').off('click').on('click', () => {
@@ -2548,6 +2730,10 @@ function setupEvents() {
 
         $('#epaper-toggle').off('change').on('change', function() {
         applyEpaperMode($(this).is(':checked'));
+    });
+
+    $('#tv-jeroglyphics-toggle').off('change').on('change', function() {
+        applyTvJeroglyphicsMode($(this).is(':checked'));
     });
 
     
@@ -3225,6 +3411,39 @@ function handleEngineMessage(msg) {
         }
         return;
     }
+
+    if (tvJeroglyphicsAnalyzing) {
+        const pvMatch = msg.match(/multipv\s+([12]).*?\spv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (pvMatch) {
+            tvJeroglyphicsPvMoves[pvMatch[1]] = pvMatch[2];
+        }
+        if (msg.indexOf('bestmove') !== -1) {
+            tvJeroglyphicsAnalyzing = false;
+            try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+            const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
+            const candidates = [
+                tvJeroglyphicsPvMoves['1'],
+                tvJeroglyphicsPvMoves['2'],
+                bestMatch ? bestMatch[1] : null
+            ].filter(Boolean);
+            tvJeroglyphicsTopMoves = Array.from(new Set(candidates)).slice(0, 2);
+            setTvStatus('Jeroglífic: endevina una de les dues millors jugades.');
+            updateTvControls();
+        }
+        return;
+    }
+
+    if (tvJeroglyphicsHinting && msg.indexOf('bestmove') !== -1) {
+        tvJeroglyphicsHinting = false;
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])/);
+        if (match) {
+            const to = match[2];
+            highlightTvHintSquare(to);
+            setTvStatus(`Pista: Alguna peça ha d'anar a ${to}`);
+        }
+        return;
+    }
+    
     if (msg.indexOf('score cp') !== -1) {
         let match = msg.match(/score cp (-?\d+)/);
         if (match) tempAnalysisScore = parseInt(match[1]);
@@ -3804,6 +4023,7 @@ $(document).ready(() => {
     loadStorage();
     saveEpaperPreference(epaperEnabled);
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
+    applyTvJeroglyphicsMode(loadTvJeroglyphicsPreference(), { skipSave: true });
     bundleAcceptMode = loadBundleAcceptMode();
     const bSel = document.getElementById('bundle-accept-select');
     if (bSel) bSel.value = bundleAcceptMode;
