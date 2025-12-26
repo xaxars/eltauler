@@ -4121,7 +4121,7 @@ $('#btn-dismiss-install').on('click', () => {
 $(document).ready(() => {
     updateDeviceType();
     loadStorage();
-    saveEpaperPreference(epaperEnabled);
+    applyEpaperMode(loadEpaperPreference(), { skipSave: true });
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
     applyTvJeroglyphicsMode(loadTvJeroglyphicsPreference(), { skipSave: true });
     bundleAcceptMode = loadBundleAcceptMode();
