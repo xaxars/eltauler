@@ -746,6 +746,7 @@
         }
         .tv-section .history-board {
             max-width: 640px;
+            position: relative;
         }
         #tv-screen .settings-panel {
             text-align: center;
@@ -773,8 +774,17 @@
             color: var(--text-primary);
             display: none;
         }
+        .tv-jeroglyphics-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            background: rgba(10, 10, 10, 0.35);
+            z-index: 3;
+        }      
         .tv-jeroglyphics-result {
-            margin: 12px auto 0;
             padding: 14px 16px;
             max-width: 320px;
             border-radius: 12px;
@@ -782,6 +792,11 @@
             background: rgba(76, 175, 80, 0.12);
             text-align: center;
             display: none;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+        .tv-jeroglyphics-result--incorrect {
+            border-color: rgba(244, 67, 54, 0.6);
+            background: rgba(244, 67, 54, 0.12);       
         }
         .tv-jeroglyphics-result-icon {
             font-size: 2rem;
@@ -790,6 +805,11 @@
         .tv-jeroglyphics-result-text {
             font-weight: 700;
             margin-bottom: 8px;
+        }
+        .tv-jeroglyphics-result-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
         .tv-end-actions {
             display: flex;
@@ -1322,13 +1342,25 @@
                         </div>
                         <div class="history-board">
                             <div id="tv-board"></div>
+                             <div class="tv-jeroglyphics-overlay" id="tv-jeroglyphics-overlay">
+                                <div class="tv-jeroglyphics-result" id="tv-jeroglyphics-result-correct">
+                                    <div class="tv-jeroglyphics-result-icon">✅</div>
+                                    <div class="tv-jeroglyphics-result-text">Correcte!</div>
+                                    <div class="tv-jeroglyphics-result-actions">
+                                        <button class="btn btn-primary" id="tv-jeroglyphics-continue">Seguir mirant partida</button>
+                                    </div>
+                                </div>
+                                <div class="tv-jeroglyphics-result tv-jeroglyphics-result--incorrect" id="tv-jeroglyphics-result-incorrect">
+                                    <div class="tv-jeroglyphics-result-icon">❌</div>
+                                    <div class="tv-jeroglyphics-result-text">Incorrecte</div>
+                                    <div class="tv-jeroglyphics-result-actions">
+                                        <button class="btn btn-primary" id="tv-jeroglyphics-retry">Seguir intentant</button>
+                                        <button class="btn btn-secondary" id="tv-jeroglyphics-watch">Seguir mirant partida</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="tv-jeroglyphics-turn" id="tv-jeroglyphics-turn"></div>
-                        <div class="tv-jeroglyphics-result" id="tv-jeroglyphics-result">
-                            <div class="tv-jeroglyphics-result-icon">✅</div>
-                            <div class="tv-jeroglyphics-result-text">Correcte!</div>
-                            <button class="btn btn-primary" id="tv-jeroglyphics-continue">Seguir mirant partida</button>
-                        </div>
                         <div class="history-controls">
                             <button class="btn btn-secondary" id="tv-prev">⏮️ Endarrere</button>
                             <button class="btn btn-primary" id="tv-play">▶️ Play</button>
