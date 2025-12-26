@@ -1694,7 +1694,6 @@ function updateReviewChart() {
 
 function formatHistoryMode(mode) {
     if (mode === 'league') return 'Lliga';
-    if (mode === 'catalan') return 'Obertura Catalana';
     if (mode === 'free') return 'Amistosa';
     if (mode === 'drill') return 'Finals';
     return 'Partida';
@@ -2768,13 +2767,6 @@ function setupEvents() {
     $('#league-banner').on('click', () => { startLeagueRound(); });
     $('#btn-league-banner-play').on('click', (e) => { e.stopPropagation(); startLeagueRound(); });
 
-    // NOU ESDEVENIMENT: Obertura Catalana
-    $('#btn-catalan').click(() => {
-        currentGameMode = 'catalan';
-        currentOpponent = null;
-        startGame(false);
-    });
-
     $('#btn-badges').click(() => { updateBadgesModal(); $('#badges-modal').css('display', 'flex'); });
     
     $('#btn-stats').click(() => { $('#start-screen').hide(); $('#stats-screen').show(); updateStatsDisplay(); });
@@ -3340,9 +3332,6 @@ function startGame(isBundle, fen = null) {
     if (currentGameMode === 'drill') {
         playerColor = game.turn();
         boardOrientation = (playerColor === 'w') ? 'white' : 'black';
-    } else if (currentGameMode === 'catalan') {
-        playerColor = 'b';
-        boardOrientation = 'black';
     } else if (isBundle) {
         playerColor = game.turn();
         boardOrientation = (playerColor === 'w') ? 'white' : 'black';
@@ -3395,9 +3384,6 @@ function startGame(isBundle, fen = null) {
         currentOpponent = null;
         $('#engine-elo').text('Anàlisi');
         $('#game-mode-title').text(isMatchErrorReviewSession ? '🔍 Errors de la partida' : '📚 Bundle');
-    } else if (currentGameMode === 'catalan') {
-        $('#engine-elo').text('Mestre Català (Adaptatiu)');
-        $('#game-mode-title').text('🐉 Obertura Catalana');
     } else if (leagueActiveMatch) {
         currentGameMode = 'league';
         const opp = getLeaguePlayer(leagueActiveMatch.opponentId);
@@ -3462,43 +3448,6 @@ function onSnapEnd() { board.position(game.fen()); }
 
 function makeEngineMove() {
     if (!stockfish && !ensureStockfish()) return;
-
-    // LÒGICA ESPECIAL OBERTURA CATALANA
-    if (currentGameMode === 'catalan' && game.turn() === 'w') {
-        const history = game.history().length;
-        let forcedMove = null;
-
-        if (history === 0) forcedMove = 'd2d4';
-        else if (history === 2) forcedMove = 'c2c4';
-        else if (history === 4) forcedMove = 'g2g3';
-        else if (history === 6) forcedMove = 'f1g2';
-
-        if (forcedMove) {
-            const moveObj = game.move({ from: forcedMove.substring(0,2), to: forcedMove.substring(2,4), promotion: 'q' });
-            if (moveObj) {
-                game.undo();
-                
-                isEngineThinking = true;
-                $('#status').text("El Mestre Català mou...");
-                setTimeout(() => {
-                    const fromSq = forcedMove.substring(0,2);
-                    const toSq = forcedMove.substring(2,4);
-                    game.move({ from: fromSq, to: toSq });
-                    board.position(game.fen());
-                    isEngineThinking = false;
-                    requestAnimationFrame(() => highlightEngineMove(fromSq, toSq));
-                    registerEngineMovePrecision(forcedMove, null);
-                    
-                    if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
-                        goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay();
-                    }
-                    updateStatus();
-                    if (game.game_over()) handleGameOver();
-                }, 800);
-                return;
-            }
-        }
-    }
 
     isEngineThinking = true; 
     $('#status').text("L'adversari pensa...");
