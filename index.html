@@ -222,9 +222,30 @@
         }
         .mission-item {
             display: flex; align-items: center; gap: 10px; padding: 8px; margin-bottom: 6px;
-            background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid var(--text-secondary);
+            background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
+            position: relative;
         }
-        .mission-item.completed { border-left-color: var(--accent-green); opacity: 0.8; background: rgba(74, 124, 89, 0.1); }
+        .mission-item.completed { opacity: 0.8; background: rgba(74, 124, 89, 0.1); }
+        .mission-accent-1 { --mission-color: 201, 162, 39; }
+        .mission-accent-2 { --mission-color: 74, 124, 89; }
+        .mission-accent-3 { --mission-color: 25, 118, 210; }
+        .mission-item.mission-accent-1,
+        .mission-item.mission-accent-2,
+        .mission-item.mission-accent-3 {
+            border-color: rgba(var(--mission-color), 0.55);
+            box-shadow: 0 0 0 1px rgba(var(--mission-color), 0.35);
+            animation: missionPulse 3.6s ease-in-out infinite;
+        }
+        @keyframes missionPulse {
+            0%, 100% {
+                border-color: rgba(var(--mission-color), 0.4);
+                box-shadow: 0 0 0 1px rgba(var(--mission-color), 0.25), 0 0 10px rgba(var(--mission-color), 0.12);
+            }
+            50% {
+                border-color: rgba(var(--mission-color), 0.85);
+                box-shadow: 0 0 0 1px rgba(var(--mission-color), 0.55), 0 0 16px rgba(var(--mission-color), 0.35);
+            }
+        }
 
         .mission-stars { font-size: 0.9rem; color: var(--star-gold); width: 54px; text-align: center; opacity: 0.9; }
         .mission-text { flex: 1; font-size: 0.85rem; color: var(--text-primary); }
@@ -316,7 +337,11 @@
             box-shadow: none !important;
             color: #222;
         }
-        body.epaper-mode .mission-item { border-left-color: #cfcfcf !important; }
+        body.epaper-mode .mission-item {
+            border-color: #cfcfcf !important;
+            box-shadow: none !important;
+            animation: none !important;
+        }
         body.epaper-mode .stat-card-value { color: #222; }
         body.epaper-mode .stat-card-label,
         body.epaper-mode .setting-help,
