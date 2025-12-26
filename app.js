@@ -80,6 +80,8 @@ let lastReviewSnapshot = null;
 let lastPosition = null; 
 let blunderMode = false;
 let currentBundleFen = null;
+let currentBundleSeverity = null;
+let currentBundleSource = null;
 let playerColor = 'w';
 let isRandomBundleSession = false;
 const LEAGUE_QUOTES = [
@@ -3177,7 +3179,7 @@ function showBundleMenu() {
             groups[sevKey].forEach(({ err, idx }) => {
                 const severityClass = err.severity;
                 const severityLabel = err.severity === 'low' ? 'Lleu' : err.severity === 'med' ? 'Mitjà' : 'Greu';
-                html += `<div class="bundle-item ${severityClass}" onclick="startBundleGame('${err.fen}')">`;
+                html += `<div class="bundle-item ${severityClass}" onclick="startBundleGame(${JSON.stringify(err.fen)}, ${JSON.stringify(severityClass)})">`;
                 html += `<div><strong>${severityLabel}</strong><div class="bundle-meta">${err.date} • ELO: <span class="bundle-elo">${err.elo || '?'}</span></div></div>`;
                 html += `<div class="bundle-remove" onclick="event.stopPropagation(); removeBundle(${idx})">🗑️</div>`;
                 html += '</div>';
@@ -3191,10 +3193,6 @@ function showBundleMenu() {
     html += '</div>'; 
     html += '<button class="close-modal" onclick="$(\'#bundle-modal\').remove()">Tancar</button></div></div>';
     $('body').append(html);
-
-    ['high', 'med', 'low'].forEach((sevKey) => {
-        if (groups[sevKey].length > 0) $('#bundle-modal .bundle-section.' + sevKey).addClass('open');
-    });
 
     $('#bundle-modal .bundle-section-header').off('click').on('click', function() {
         $(this).closest('.bundle-section').toggleClass('open');
@@ -3212,11 +3210,13 @@ function removeBundle(idx) {
     }
 }
 
-window.startBundleGame = function(fen) {
+window.startBundleGame = function(fen, severity = null) {
     isRandomBundleSession = false;
     isMatchErrorReviewSession = false;
     matchErrorQueue = [];
     currentMatchError = null;
+    currentBundleSource = 'category';
+    currentBundleSeverity = (severity === 'low' || severity === 'med' || severity === 'high') ? severity : null;
     $('#bundle-modal').remove(); currentGameMode = 'bundle';
     currentOpponent = null;
     startGame(true, fen);
@@ -3229,6 +3229,8 @@ function startRandomBundleGame() {
     isMatchErrorReviewSession = false;
     matchErrorQueue = [];
     currentMatchError = null;
+    currentBundleSource = 'random';
+    currentBundleSeverity = null;  
     $('#bundle-modal').remove();
     currentGameMode = 'bundle';
     currentOpponent = null;
@@ -3245,6 +3247,8 @@ function startMatchErrorReview() {
     matchErrorQueue = currentGameErrors.slice();
     isMatchErrorReviewSession = true;
     currentMatchError = null;
+    currentBundleSource = 'match';
+    currentBundleSeverity = null;   
     launchNextMatchError();
 }
 
@@ -3297,9 +3301,12 @@ function startGame(isBundle, fen = null) {
         matchErrorQueue = [];
         currentMatchError = null;
         isMatchErrorReviewSession = false;
-    }
+        currentBundleSource = null;
+        currentBundleSeverity = null;
+        }
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
     $('#bundle-success-overlay').hide();
+    $('#bundle-category-success-overlay').hide(); 
     if (!isBundle) isRandomBundleSession = false;
     
     $('#start-screen').hide(); 
@@ -3839,6 +3846,8 @@ function returnToMainMenuImmediate() {
     isMatchErrorReviewSession = false;
     matchErrorQueue = [];
     currentMatchError = null;
+    currentBundleSource = null;
+    currentBundleSeverity = null;
 }
 
 function handleBundleSuccess() {
@@ -3864,6 +3873,8 @@ function handleBundleSuccess() {
         promptMatchErrorNext();
     } else if (isRandomBundleSession) {
         showRandomBundleSuccessOverlay();
+    } else if (currentBundleSource === 'category') {
+        showCategoryBundleSuccessOverlay();
     } else {
         alert("Molt bé! Has trobat la millor opció.");
         returnToMainMenuImmediate();
@@ -3898,6 +3909,56 @@ function showRandomBundleSuccessOverlay() {
             returnToMainMenuImmediate();
         }
     });
+}
+
+function showCategoryBundleSuccessOverlay() {
+    const overlay = $('#bundle-category-success-overlay');
+    if (!overlay.length) {
+        alert("Molt bé! Has trobat la millor opció.");
+        returnToBundleMenu();
+        return;
+    }
+
+    const severity = currentBundleSeverity;
+    const labels = { low: 'lleus', med: 'mitjans', high: 'greus' };
+    const remaining = severity ? savedErrors.filter(err => err.severity === severity).length : 0;
+    const remainingText = severity
+        ? `Queden ${remaining} errors ${labels[severity] || ''}.`
+        : 'Queden errors pendents.';
+    overlay.find('.bundle-success-remaining').text(remainingText);
+    const againBtn = overlay.find('#btn-bundle-category-again');
+    againBtn.prop('disabled', remaining === 0 || !severity);
+    overlay.css('display', 'flex');
+
+    $('#btn-bundle-category-home').off('click').on('click', () => {
+        overlay.hide();
+        returnToBundleMenu();
+    });
+
+    againBtn.off('click').on('click', () => {
+        overlay.hide();
+        if (!startCategoryBundleNext(severity)) {
+            returnToBundleMenu();
+        }
+    });
+}
+
+function startCategoryBundleNext(severity) {
+    if (!severity) return false;
+    const pool = savedErrors.filter(err => err.severity === severity);
+    if (pool.length === 0) return false;
+    const choice = pool[Math.floor(Math.random() * pool.length)];
+    startBundleGame(choice.fen, severity);
+    return true;
+}
+
+function returnToBundleMenu() {
+    returnToMainMenuImmediate();
+    if (savedErrors.length > 0) {
+        showBundleMenu();
+    } else {
+        alert('No tens errors guardats');
+    }
 }
 
 function updatePrecisionDisplay() {
