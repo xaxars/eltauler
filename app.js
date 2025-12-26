@@ -1610,7 +1610,7 @@ const TV_LICHESS_CHANNELS = [
     { id: 'chess960', label: 'Chess960' }
 ];
 
-const TV_ELO_LEVELS = [2800, 2700, 2600, 2500, 2400, 2300];
+const TV_ELO_LEVELS = [2800, 2700, 2600, 2500, 2400];
 const TV_LICHESS_RATINGS = [1600, 1800, 2000, 2200, 2500];
 const TV_LICHESS_SPEEDS = ['blitz', 'rapid', 'classical'];
 let tvSelectedElo = TV_ELO_LEVELS[0];
