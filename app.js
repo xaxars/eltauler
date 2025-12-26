@@ -1610,7 +1610,12 @@ const TV_LICHESS_CHANNELS = [
     { id: 'chess960', label: 'Chess960' }
 ];
 
-const TV_FALLBACK_POOL = [
+const TV_ELO_LEVELS = [2800, 2700, 2600, 2500, 2400, 2300];
+const TV_LICHESS_RATINGS = [1600, 1800, 2000, 2200, 2500];
+const TV_LICHESS_SPEEDS = ['blitz', 'rapid', 'classical'];
+let tvSelectedElo = TV_ELO_LEVELS[0];
+
+const TV_FALLBACK_POOL = [  
     {
         id: 'carlsen-caruana-wcc2018-g12',
         white: 'Magnus Carlsen',
@@ -1717,6 +1722,35 @@ const MASTERS_OPENINGS = [
 
 const MIN_TV_MOVES = 21;
 let lastTvDynamicId = null;
+
+function mapEloToLichessRating(elo) {
+    return TV_LICHESS_RATINGS.reduce((closest, rating) => {
+        if (closest === null) return rating;
+        const currentDiff = Math.abs(rating - elo);
+        const bestDiff = Math.abs(closest - elo);
+        return currentDiff < bestDiff ? rating : closest;
+    }, null);
+}
+
+function updateTvEloUI() {
+    const subtitle = document.getElementById('tv-subtitle');
+    const title = document.getElementById('tv-title');
+    if (subtitle) {
+        subtitle.textContent = `ELO ${tvSelectedElo} · Lichess TV (si està disponible) o partida aleatòria de la base de dades oberta.`;
+    }
+    if (title) {
+        title.textContent = `ELO ${tvSelectedElo} · Reproducció`;
+    }
+    $('.tv-card').removeClass('active');
+    $(`.tv-card[data-elo="${tvSelectedElo}"]`).addClass('active');
+}
+
+function setTvEloSelection(elo, options = {}) {
+    if (!TV_ELO_LEVELS.includes(elo)) return;
+    tvSelectedElo = elo;
+    updateTvEloUI();
+    if (!options.skipLoad) void loadRandomTvGame();
+}
 
 function stopHistoryPlayback() {
     if (historyReplay && historyReplay.timer) {
@@ -2132,18 +2166,52 @@ async function fetchTopPlayerGame() {
     }
 }
 
-async function fetchLichessTvGame() {
-    const rand = Math.random();
-    let entry = null;
+async function fetchLichessDbGameByElo(targetElo) {
+    const fen = MASTERS_OPENINGS[Math.floor(Math.random() * MASTERS_OPENINGS.length)];
+    const rating = mapEloToLichessRating(targetElo);
+    const speed = TV_LICHESS_SPEEDS[Math.floor(Math.random() * TV_LICHESS_SPEEDS.length)];
 
-    if (rand < 0.6) {
-        entry = await fetchMastersGame();
-    } else {
-        entry = await fetchTopPlayerGame();
+    try {
+        const response = await fetch(
+            `https://explorer.lichess.ovh/lichess?fen=${encodeURIComponent(fen)}&topGames=15&ratings=${rating}&speeds=${speed}`,
+            { headers: { 'Accept': 'application/json' } }
+        );
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        const topGames = data.topGames || [];
+        if (!topGames.length) return null;
+
+        const game = topGames[Math.floor(Math.random() * topGames.length)];
+        if (!game.id) return null;
+
+        const pgnResponse = await fetch(
+            `https://lichess.org/game/export/${game.id}`,
+            { headers: { 'Accept': 'application/x-chess-pgn' } }
+        );
+        if (!pgnResponse.ok) return null;
+
+        const pgnText = await pgnResponse.text();
+        if (!pgnText || pgnText.trim().length < 50) return null;
+
+        const whiteName = game.white?.name || 'Blanques';
+        const blackName = game.black?.name || 'Negres';
+
+        return {
+            id: `lichess-db-${game.id}`,
+            white: whiteName,
+            black: blackName,
+            whiteElo: game.white?.rating || rating || '—',
+            blackElo: game.black?.rating || rating || '—',
+            event: `Lichess ${speed}`,
+            date: game.year ? `${game.year}` : formatTvDate(),
+            result: game.winner === 'white' ? '1-0' : game.winner === 'black' ? '0-1' : '1/2-1/2',
+            pgnText: pgnText.trim()
+        };
+    } catch (err) {
+        console.warn('fetchLichessDbGameByElo error:', err);
+        return null;
     }
-
-    if (entry) lastTvDynamicId = entry.id;
-    return entry;
 }
 
 async function loadTvGame(entry) {
@@ -2248,8 +2316,9 @@ function pickRandomTvGame() {
 }
 
 async function loadRandomTvGame() {
-      const dynamicEntry = await fetchLichessTvGame();
+    const dynamicEntry = await fetchLichessDbGameByElo(tvSelectedElo);
     if (dynamicEntry) {
+        lastTvDynamicId = dynamicEntry.id;
         const ok = await loadTvGame(dynamicEntry);
         if (ok) return;
     }
@@ -2412,6 +2481,7 @@ function setupEvents() {
         $('#start-screen').hide();
         $('#tv-screen').show();
         initTvBoard();
+        updateTvEloUI();        
         void loadRandomTvGame();
         setTimeout(() => { resizeTvBoardToViewport(); }, 0);
     });
@@ -2455,7 +2525,11 @@ function setupEvents() {
         $('#tv-screen').hide();
         $('#start-screen').show();
     });
-    $('.tv-card.gold').off('click').on('click', () => {
+    $('.tv-card').off('click').on('click', function() {
+        const selected = Number($(this).data('elo'));
+        if (Number.isFinite(selected)) {
+            setTvEloSelection(selected);
+        }
         const boardEl = document.getElementById('tv-board');
         if (boardEl) boardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
