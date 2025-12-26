@@ -765,6 +765,32 @@
             text-align: center;
             min-height: 1.1em;
         }
+        .tv-jeroglyphics-turn {
+            margin-top: 12px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-primary);
+            display: none;
+        }
+        .tv-jeroglyphics-result {
+            margin: 12px auto 0;
+            padding: 14px 16px;
+            max-width: 320px;
+            border-radius: 12px;
+            border: 2px solid rgba(76, 175, 80, 0.5);
+            background: rgba(76, 175, 80, 0.12);
+            text-align: center;
+            display: none;
+        }
+        .tv-jeroglyphics-result-icon {
+            font-size: 2rem;
+            margin-bottom: 4px;
+        }
+        .tv-jeroglyphics-result-text {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
         .tv-end-actions {
             display: flex;
             gap: 10px;
@@ -1296,6 +1322,12 @@
                         </div>
                         <div class="history-board">
                             <div id="tv-board"></div>
+                        </div>
+                        <div class="tv-jeroglyphics-turn" id="tv-jeroglyphics-turn"></div>
+                        <div class="tv-jeroglyphics-result" id="tv-jeroglyphics-result">
+                            <div class="tv-jeroglyphics-result-icon">✅</div>
+                            <div class="tv-jeroglyphics-result-text">Correcte!</div>
+                            <button class="btn btn-primary" id="tv-jeroglyphics-continue">Seguir mirant partida</button>
                         </div>
                         <div class="history-controls">
                             <button class="btn btn-secondary" id="tv-prev">⏮️ Endarrere</button>
