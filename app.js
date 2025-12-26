@@ -2088,9 +2088,12 @@ function tvOnDrop(source, target) {
     const testGame = new Chess(tvReplay.game.fen());
     const move = testGame.move({ from: source, to: target, promotion: 'q' });
     if (!move) return 'snapback';
-    const uci = move.from + move.to + (move.promotion ? move.promotion : '');
+    const uciBase = move.from + move.to;
+    const uci = uciBase + (move.promotion ? move.promotion : '');
     const accepted = tvJeroglyphicsTopMoves.filter(Boolean);
-    const ok = accepted.length > 0 && accepted.includes(uci);
+    const ok = accepted.length > 0 && accepted.some(candidate => (
+        candidate === uci || candidate === uciBase || candidate.startsWith(uciBase)
+    ));
     if (ok) {
         setTvStatus('Correcte! Pots continuar la partida.');
         tvJeroglyphicsSolved = true;
