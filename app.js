@@ -3200,10 +3200,9 @@ function showBundleMenu() {
 
     $('#bundle-modal .bundle-item').off('click').on('click', function() {
         const idx = Number(this.dataset.idx);
-        const severity = this.dataset.severity || null;
         const entry = savedErrors[idx];
         if (!entry) return;
-        startBundleGame(entry.fen, severity);
+        startSelectedBundleGame(entry);
     });
  
     $('#btn-bundle-random').off('click').on('click', () => {
@@ -3243,6 +3242,21 @@ function startRandomBundleGame() {
     currentGameMode = 'bundle';
     currentOpponent = null;
     startGame(true, choice.fen);
+    return true;
+}
+
+function startSelectedBundleGame(entry) {
+    if (!entry || !entry.fen) return false;
+    isRandomBundleSession = true;
+    isMatchErrorReviewSession = false;
+    matchErrorQueue = [];
+    currentMatchError = null;
+    currentBundleSource = 'manual';
+    currentBundleSeverity = null;
+    $('#bundle-modal').remove();
+    currentGameMode = 'bundle';
+    currentOpponent = null;
+    startGame(true, entry.fen);
     return true;
 }
 
