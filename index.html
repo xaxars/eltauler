@@ -618,6 +618,31 @@
         .precision-panel.ai-precision-panel .precision-bar { background: var(--accent-purple); }
         .precision-bar.warning { background: var(--severity-med); }
         .precision-bar.danger { background: var(--severity-high); }
+        .calibration-progress {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 8px;
+        }
+        .calibration-progress-text {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        .calibration-progress-bar {
+            height: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .calibration-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-purple);
+            transition: width 0.3s ease;
+        }
+        .status-message.elo-reveal {
+            animation: pulse-purple 1.2s ease-in-out 2;
+        }        
         .precision-target { position: absolute; left: 75%; top: 0; width: 2px; height: 100%; background: rgba(255,255,255,0.5); }
         
         .board-container { position: relative; margin-bottom: 15px; }
@@ -1533,6 +1558,12 @@
                     <div>📚 <span id="game-bundles" style="color:var(--text-secondary); font-weight:bold;">0</span></div>
                     <div class="streak-badge">★ <span id="game-stars">0</span></div>
                 </div>
+                <div class="calibration-progress" id="calibration-progress">
+                    <div class="calibration-progress-text" id="calibration-progress-text">Avaluant nivell... 1/5</div>
+                    <div class="calibration-progress-bar">
+                        <div class="calibration-progress-fill" id="calibration-progress-fill"></div>
+                    </div>
+                </div>            
             </div>
             
             <div class="precision-panel">
