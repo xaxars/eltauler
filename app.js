@@ -3179,7 +3179,7 @@ function showBundleMenu() {
             groups[sevKey].forEach(({ err, idx }) => {
                 const severityClass = err.severity;
                 const severityLabel = err.severity === 'low' ? 'Lleu' : err.severity === 'med' ? 'Mitjà' : 'Greu';
-                html += `<div class="bundle-item ${severityClass}" onclick="startBundleGame(${JSON.stringify(err.fen)}, ${JSON.stringify(severityClass)})">`;
+                html += `<div class="bundle-item ${severityClass}" data-idx="${idx}" data-severity="${severityClass}">`;
                 html += `<div><strong>${severityLabel}</strong><div class="bundle-meta">${err.date} • ELO: <span class="bundle-elo">${err.elo || '?'}</span></div></div>`;
                 html += `<div class="bundle-remove" onclick="event.stopPropagation(); removeBundle(${idx})">🗑️</div>`;
                 html += '</div>';
@@ -3198,6 +3198,14 @@ function showBundleMenu() {
         $(this).closest('.bundle-section').toggleClass('open');
     });
 
+    $('#bundle-modal .bundle-item').off('click').on('click', function() {
+        const idx = Number(this.dataset.idx);
+        const severity = this.dataset.severity || null;
+        const entry = savedErrors[idx];
+        if (!entry) return;
+        startBundleGame(entry.fen, severity);
+    });
+ 
     $('#btn-bundle-random').off('click').on('click', () => {
         startRandomBundleGame();
     });
