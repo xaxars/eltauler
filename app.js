@@ -40,12 +40,10 @@ let tvJeroglyphicsIncorrect = false;
 // Sistema d'IA Adaptativa
 let recentGames = []; 
 let aiDifficulty = 8; 
-const ADAPTIVE_LEVEL_KEY = 'chess_adaptiveLevel';
 const ADAPTIVE_CONFIG = {
     MIN_LEVEL: 50,
     MAX_LEVEL: 3000,
     DEFAULT_LEVEL: 75,
-    CALIBRATION_MOVES: 12,
     PRECISION_HIGH: 85,
     PRECISION_MID: 70,
     PRECISION_LOW: 45,
@@ -58,21 +56,20 @@ const ADAPTIVE_CONFIG = {
 };
 const ERROR_WINDOW_N = 30;
 const TH_ERR = 80;
-const ERROR_TARGET = 0.35;
-const STEP_ELO = 40;
 const ELO_MIN = 200;
 const ELO_MAX = 2000;
 const CALIBRATION_ENGINE_PRECISION = 50;
-const CALIBRATION_ENGINE_DIFFICULTY = 6;
-let adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
+const CALIBRATION_GAME_COUNT = 5;
+const CALIBRATION_ELOS = [400, 600, 800, 1000, 1200];
 let recentErrors = [];
-let currentElo = clampEngineElo(adaptiveLevel);
+let currentElo = clampEngineElo(ADAPTIVE_CONFIG.DEFAULT_LEVEL);
+aiDifficulty = levelToDifficulty(currentElo);
 let consecutiveWins = 0;
 let consecutiveLosses = 0;
-let isCalibrationPhase = true;
-let calibrationMoves = 0;
-let calibrationGoodMoves = 0;
+let isCalibrating = true;
+let calibrationGames = [];
 let isCalibrationGame = false;
+let currentCalibrationOpponentElo = null;
 let isEngineThinking = false;
 let engineMoveCandidates = [];
 let lastReviewSnapshot = null;
@@ -348,9 +345,10 @@ function buildBackupData({ includeGameHistory = false } = {}) {
         totalStars: totalStars, unlockedBadges: unlockedBadges, todayMissions: todayMissions, missionsDate: missionsDate,
         sessionStats: sessionStats, eloHistory: eloHistory, totalGamesPlayed: totalGamesPlayed,
         totalWins: totalWins, maxStreak: maxStreak,
-        aiDifficulty: aiDifficulty, adaptiveLevel: adaptiveLevel, recentGames: recentGames, consecutiveWins: consecutiveWins,
+        aiDifficulty: aiDifficulty, currentElo: currentElo, recentGames: recentGames, consecutiveWins: consecutiveWins,
         consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
-        reviewHistory: reviewHistory, date: new Date().toLocaleDateString()
+        reviewHistory: reviewHistory, date: new Date().toLocaleDateString(),
+        isCalibrating: isCalibrating, calibrationGames: calibrationGames
     };
     if (includeGameHistory) base.gameHistory = gameHistory;
     return base;
@@ -369,12 +367,26 @@ function importBackupData(data) {
         leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
     };
     eloHistory = data.eloHistory || []; totalGamesPlayed = data.totalGamesPlayed || 0; totalWins = data.totalWins || 0; maxStreak = data.maxStreak || 0;
-    adaptiveLevel = clampAdaptiveLevel(typeof data.adaptiveLevel === 'number' ? data.adaptiveLevel : difficultyToLevel(data.aiDifficulty || 8));
-    aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
+       const importedElo = (typeof data.currentElo === 'number') ? data.currentElo
+        : (typeof data.adaptiveLevel === 'number') ? data.adaptiveLevel
+            : (typeof data.aiDifficulty === 'number') ? difficultyToLevel(data.aiDifficulty)
+                : userELO;
+    currentElo = clampEngineElo(importedElo);
+    aiDifficulty = levelToDifficulty(currentElo); recentGames = data.recentGames || []; consecutiveWins = data.consecutiveWins || 0; consecutiveLosses = data.consecutiveLosses || 0;
     currentLeague = data.currentLeague || null;
     leagueActiveMatch = data.leagueActiveMatch || null;
     reviewHistory = data.reviewHistory || [];
     gameHistory = data.gameHistory || [];
+       isCalibrating = typeof data.isCalibrating === 'boolean' ? data.isCalibrating : isCalibrating;
+    calibrationGames = Array.isArray(data.calibrationGames) ? data.calibrationGames : calibrationGames;
+    if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
+        isCalibrating = false;
+    }
+    currentCalibrationOpponentElo = null;
+    if (!isCalibrating) {
+        userELO = Math.max(50, currentElo);
+        syncEngineEloFromUser();
+    }
     saveStorage(); updateDisplay(); alert('Dades importades!');
 }
 
@@ -1030,7 +1042,8 @@ function renderLeague() {
             else if (idx === 2) tr.addClass('league-podium-3');
         }
 
-        tr.append(`<td>${p.name}</td>`);
+        const displayElo = (isCalibrationActive() && p.id === 'me') ? '—' : p.elo;
+        tr.append(`<td class="num">${displayElo}</td>`);
         tr.append(`<td class="num">${p.elo}</td>`);
         tr.append(`<td class="num">${p.pj}</td>`);
         tr.append(`<td class="num">${p.pg}</td>`);
@@ -1332,13 +1345,8 @@ function restoreMissions(savedList) {
         .filter(Boolean);
 }
 
-function clampAdaptiveLevel(level) {
-    if (isNaN(level)) return ADAPTIVE_CONFIG.DEFAULT_LEVEL;
-    return Math.max(ADAPTIVE_CONFIG.MIN_LEVEL, Math.min(ADAPTIVE_CONFIG.MAX_LEVEL, level));
-}
-
 function clampEngineElo(elo) {
-    if (isNaN(elo)) return Math.round(Math.max(ELO_MIN, Math.min(ELO_MAX, adaptiveLevel)));
+    if (isNaN(elo)) return Math.round(Math.max(ELO_MIN, Math.min(ELO_MAX, currentElo)));
     return Math.round(Math.max(ELO_MIN, Math.min(ELO_MAX, elo)));
 }
 
@@ -1355,57 +1363,12 @@ function levelToDifficulty(level) {
 }
 
 function getEffectiveAIDifficulty() {
-    return isCalibrationGame ? CALIBRATION_ENGINE_DIFFICULTY : aiDifficulty;
+    if (isCalibrationGame) return levelToDifficulty(currentCalibrationOpponentElo || CALIBRATION_ELOS[0]);
+    return aiDifficulty;
 }
 
 function getAdaptiveNormalized() {
-    return Math.max(0, Math.min(1, (adaptiveLevel - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
-}
-
-function precisionToAdaptiveLevel(precision) {
-    const normalized = Math.max(0, Math.min(1, (precision || 0) / 100));
-    return Math.round(ADAPTIVE_CONFIG.MIN_LEVEL + normalized * (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL));
-}
-
-function precisionToUserElo(precision) {
-    const normalized = Math.max(0, Math.min(1, (precision || 0) / 100));
-    return Math.round(ELO_MIN + normalized * (ELO_MAX - ELO_MIN));
-}
-
-function applyCalibrationResult(precision) {
-    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
-    adaptiveLevel = clampAdaptiveLevel(precisionToAdaptiveLevel(safePrecision));
-    aiDifficulty = levelToDifficulty(adaptiveLevel);
-    currentElo = clampEngineElo(adaptiveLevel);
-    applyEngineEloStrength(currentElo);
-    updateAdaptiveEngineEloLabel();
-    userELO = Math.max(50, precisionToUserElo(safePrecision));
-    updateEloHistory(userELO);
-}
-
-function finalizeCalibration() {
-    const avgPrecision = calibrationMoves > 0 ? Math.round((calibrationGoodMoves / calibrationMoves) * 100) : 50;
-    applyCalibrationResult(avgPrecision);
-    isCalibrationPhase = false;
-    saveStorage();
-}
-
-function finalizeCalibrationFromPrecision(precision) {
-    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 50));
-    applyCalibrationResult(safePrecision);
-    calibrationMoves = ADAPTIVE_CONFIG.CALIBRATION_MOVES;
-    calibrationGoodMoves = Math.round((safePrecision / 100) * ADAPTIVE_CONFIG.CALIBRATION_MOVES);
-    isCalibrationPhase = false;
-    saveStorage();
-}
-
-function registerCalibrationMove(isGood) {
-    if (!isCalibrationPhase || isCalibrationGame || blunderMode || currentGameMode === 'drill') return;
-    if (calibrationMoves >= ADAPTIVE_CONFIG.CALIBRATION_MOVES) return;
-    calibrationMoves += 1;
-    if (isGood) calibrationGoodMoves += 1;
-    if (calibrationMoves >= ADAPTIVE_CONFIG.CALIBRATION_MOVES) finalizeCalibration();
-    else saveStorage();
+     return Math.max(0, Math.min(1, (currentElo - ADAPTIVE_CONFIG.MIN_LEVEL) / (ADAPTIVE_CONFIG.MAX_LEVEL - ADAPTIVE_CONFIG.MIN_LEVEL)));
 }
 
 function adjustAIDifficulty(playerWon, precision, resultScore = null) {
@@ -1419,35 +1382,100 @@ function adjustAIDifficulty(playerWon, precision, resultScore = null) {
     else if (normalizedScore === 0) { consecutiveLosses++; consecutiveWins = 0; }
     else { consecutiveWins = 0; consecutiveLosses = 0; }
 
-    if (isCalibrationPhase) {
+    if (isCalibrating) {
         saveStorage();
         return;
     }
-    
-    const recentWindow = recentGames.slice(-8);
-    const avgScore = recentWindow.length > 0 ? recentWindow.reduce((sum, g) => {
-        const scoreValue = (typeof g.result === 'number') ? g.result : (g.won ? 1 : 0);
-        return sum + scoreValue;
-    }, 0) / recentWindow.length : 0.5;
-    const avgPrecision = recentWindow.length > 0 ? recentWindow.reduce((sum, g) => sum + (typeof g.precision === 'number' ? g.precision : 50), 0) / recentWindow.length : 50;
-    
-    let adjustment = 0;
-    if (avgPrecision >= ADAPTIVE_CONFIG.PRECISION_HIGH && avgScore >= 0.6) adjustment += ADAPTIVE_CONFIG.BOOST_HIGH;
-    else if (avgPrecision >= ADAPTIVE_CONFIG.PRECISION_MID && avgScore >= 0.55) adjustment += ADAPTIVE_CONFIG.BOOST_MID;
-    else if (avgPrecision >= 60 && avgScore >= 0.5) adjustment += ADAPTIVE_CONFIG.BOOST_LOW;
+      saveStorage();
+}
 
-    if (avgPrecision < ADAPTIVE_CONFIG.PRECISION_LOW && avgScore < 0.45) adjustment += ADAPTIVE_CONFIG.PENALTY_SOFT;
-    if (avgPrecision < 40 && avgScore < 0.35) adjustment += ADAPTIVE_CONFIG.PENALTY_STRONG;
+ function isCalibrationActive() {
+    return isCalibrating && calibrationGames.length < CALIBRATION_GAME_COUNT;
+}
 
-    if (consecutiveWins >= 3) { adjustment += ADAPTIVE_CONFIG.STREAK_DELTA; consecutiveWins = 0; }
-    if (consecutiveLosses >= 3) { adjustment -= ADAPTIVE_CONFIG.STREAK_DELTA; consecutiveLosses = 0; }
-    
-    adaptiveLevel = clampAdaptiveLevel(adaptiveLevel + adjustment);
-    aiDifficulty = levelToDifficulty(adaptiveLevel); // per compatibilitat amb dades antigues
+  function getCalibrationGameIndex() {
+    return Math.min(calibrationGames.length, CALIBRATION_GAME_COUNT - 1);
+}
+
+function getCalibrationOpponentElo() {
+    return CALIBRATION_ELOS[getCalibrationGameIndex()] || CALIBRATION_ELOS[CALIBRATION_ELOS.length - 1];
+}
+
+function getCalibrationProgressCount() {
+    const extra = isCalibrationGame ? 1 : 0;
+    return Math.min(calibrationGames.length + extra, CALIBRATION_GAME_COUNT);
+}
+
+function updateCalibrationProgressUI() {
+    const container = $('#calibration-progress');
+    if (!container.length) return;
+    if (!isCalibrationActive()) {
+        container.hide();
+        return;
+    }
+    const progressCount = getCalibrationProgressCount();
+    $('#calibration-progress-text').text(`Avaluant nivell... ${progressCount}/${CALIBRATION_GAME_COUNT}`);
+    $('#calibration-progress-fill').css('width', `${Math.round((progressCount / CALIBRATION_GAME_COUNT) * 100)}%`);
+    container.show();
+}
+
+function estimateCalibrationElo() {
+    if (!calibrationGames.length) return clampEngineElo(ADAPTIVE_CONFIG.DEFAULT_LEVEL);
+    const totalPrecision = calibrationGames.reduce((sum, game) => sum + (typeof game.precision === 'number' ? game.precision : 50), 0);
+    const avgPrecision = Math.round(totalPrecision / calibrationGames.length);
+    const wins = calibrationGames.filter(game => game.result === 'win');
+    let baseElo = 0;
+    if (wins.length > 0) {
+        let weightSum = 0;
+        let weightedTotal = 0;
+        wins.forEach(game => {
+            const weight = Math.max(0.1, (game.precision || 50) / 100);
+            weightedTotal += game.opponentElo * weight;
+            weightSum += weight;
+        });
+        baseElo = weightedTotal / weightSum;
+    } else {
+        baseElo = calibrationGames.reduce((sum, game) => sum + game.opponentElo, 0) / calibrationGames.length;
+    }
+    const precisionAdjust = Math.round((avgPrecision - 50) * 4);
+    return clampEngineElo(Math.round(baseElo + precisionAdjust));
+}
+
+function showCalibrationReveal(eloValue) {
+    const statusEl = $('#status');
+    if (!statusEl.length) return;
+    statusEl.text(`El teu nivell: ${eloValue} ELO`).addClass('elo-reveal');
+    setTimeout(() => statusEl.removeClass('elo-reveal'), 2200);
+}
+
+function finalizeCalibrationFromGames() {
+    const estimatedElo = estimateCalibrationElo();
+    userELO = Math.max(50, estimatedElo);
+    updateEloHistory(userELO);
+    syncEngineEloFromUser();
+    isCalibrating = false;
+    currentCalibrationOpponentElo = null;
     saveStorage();
+    updateDisplay();
+}
+
+function recordCalibrationGame(resultScore, precision) {
+    const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 0));
+    const result = resultScore === 1 ? 'win' : resultScore === 0 ? 'loss' : 'draw';
+    const opponentElo = typeof currentCalibrationOpponentElo === 'number' ? currentCalibrationOpponentElo : getCalibrationOpponentElo();
+    calibrationGames.push({ opponentElo: opponentElo, result: result, precision: safePrecision });
+    if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
+        finalizeCalibrationFromGames();
+        return true;
+    } else {
+        saveStorage();
+        updateCalibrationProgressUI();
+        return false;
+    }
 }
 
 function getOpponentElo() {
+    if (isCalibrationGame && typeof currentCalibrationOpponentElo === 'number') return currentCalibrationOpponentElo;
     return (currentOpponent && typeof currentOpponent.elo === 'number') ? currentOpponent.elo : userELO;
 }
 
@@ -1624,15 +1652,31 @@ function loadStorage() {
     const rGames = localStorage.getItem('chess_recentGames'); if (rGames) recentGames = JSON.parse(rGames);
     const cWins = localStorage.getItem('chess_consecutiveWins'); if (cWins) consecutiveWins = parseInt(cWins);
     const cLosses = localStorage.getItem('chess_consecutiveLosses'); if (cLosses) consecutiveLosses = parseInt(cLosses);
-    const calPhase = localStorage.getItem('chess_isCalibrationPhase'); if (calPhase !== null) isCalibrationPhase = (calPhase === 'true');
-    const calMoves = localStorage.getItem('chess_calibrationMoves'); if (calMoves) calibrationMoves = parseInt(calMoves);
-    const calGood = localStorage.getItem('chess_calibrationGoodMoves'); if (calGood) calibrationGoodMoves = parseInt(calGood);
+       const calState = localStorage.getItem('chess_isCalibrating');
+    const calGames = localStorage.getItem('chess_calibrationGames');
+    if (calState !== null) isCalibrating = (calState === 'true');
+    if (calGames) {
+        try {
+            const parsedGames = JSON.parse(calGames);
+            if (Array.isArray(parsedGames)) calibrationGames = parsedGames;
+        } catch (e) {}
+    }
+    if (calState === null && localStorage.getItem('chess_isCalibrationPhase') !== null) {
+        isCalibrating = localStorage.getItem('chess_isCalibrationPhase') === 'true';
+    }
+    if (calState === null && !calGames && elo) {
+        isCalibrating = false;
+    }
+    if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
+        isCalibrating = false;
+    }
     const league = localStorage.getItem('chess_currentLeague'); if (league) currentLeague = JSON.parse(league);
     const lMatch = localStorage.getItem('chess_leagueActiveMatch'); if (lMatch) leagueActiveMatch = JSON.parse(lMatch);
     const reviews = localStorage.getItem('chess_reviewHistory'); if (reviews) reviewHistory = JSON.parse(reviews);
     const gameHistoryStored = localStorage.getItem('chess_gameHistory'); if (gameHistoryStored) gameHistory = JSON.parse(gameHistoryStored);
     const storedElo = localStorage.getItem('chess_currentElo');
-    currentElo = clampEngineElo(storedElo ? parseInt(storedElo) : adaptiveLevel);
+    currentElo = clampEngineElo(storedElo ? parseInt(storedElo) : userELO);
+    aiDifficulty = levelToDifficulty(currentElo);
     const storedRecentErrors = localStorage.getItem('chess_recentErrors');
     if (storedRecentErrors) {
         try {
@@ -1663,15 +1707,17 @@ function saveStorage() {
     localStorage.setItem('chess_recentGames', JSON.stringify(recentGames));
     localStorage.setItem('chess_consecutiveWins', consecutiveWins);
     localStorage.setItem('chess_consecutiveLosses', consecutiveLosses);
-    localStorage.setItem('chess_isCalibrationPhase', String(isCalibrationPhase));
-    localStorage.setItem('chess_calibrationMoves', calibrationMoves);
-    localStorage.setItem('chess_calibrationGoodMoves', calibrationGoodMoves);
+    localStorage.setItem('chess_isCalibrating', String(isCalibrating));
+    localStorage.setItem('chess_calibrationGames', JSON.stringify(calibrationGames));
     localStorage.setItem('chess_reviewHistory', JSON.stringify(reviewHistory));
     localStorage.setItem('chess_gameHistory', JSON.stringify(gameHistory));    
     localStorage.setItem('chess_currentElo', currentElo);
     localStorage.setItem('chess_recentErrors', JSON.stringify(recentErrors));
     if (currentLeague) localStorage.setItem('chess_currentLeague', JSON.stringify(currentLeague)); else localStorage.removeItem('chess_currentLeague');
     if (leagueActiveMatch) localStorage.setItem('chess_leagueActiveMatch', JSON.stringify(leagueActiveMatch)); else localStorage.removeItem('chess_leagueActiveMatch');
+    localStorage.removeItem('chess_isCalibrationPhase');
+    localStorage.removeItem('chess_calibrationMoves');
+    localStorage.removeItem('chess_calibrationGoodMoves');
 }
 
 function updateEloHistory(newElo) {
@@ -1684,6 +1730,14 @@ function updateEloHistory(newElo) {
 }
 
 function updateAdaptiveEngineEloLabel() {
+     if (isCalibrationGame && typeof currentCalibrationOpponentElo === 'number') {
+        $('#engine-elo').text(`ELO ${currentCalibrationOpponentElo}`);
+        return;
+    }
+    if (isCalibrationActive()) {
+        $('#engine-elo').text('Calibratge');
+        return;
+    }
     $('#engine-elo').text(`Adaptativa · ELO ${Math.round(currentElo)}`);
 }
 
@@ -1696,11 +1750,29 @@ function applyEngineEloStrength(eloValue) {
     } catch (e) {}
 }
 
+function syncEngineEloFromUser() {
+    currentElo = clampEngineElo(userELO);
+    aiDifficulty = levelToDifficulty(currentElo);
+    applyEngineEloStrength(currentElo);
+    updateAdaptiveEngineEloLabel();
+}
+
+function getDisplayedElo(value) {
+    return isCalibrationActive() ? '—' : String(value);
+}
+
+function updateEloDisplay() {
+    const displayValue = getDisplayedElo(userELO);
+    $('#current-elo').text(displayValue);
+    $('#game-elo').text(displayValue);
+}
+
 function updateDisplay() {
     engineELO = Math.round(currentElo);  
-    $('#current-elo').text(userELO); $('#game-elo').text(userELO);
+    updateEloDisplay();
     $('#current-stars').text(totalStars); $('#game-stars').text(totalStars);
     updateAdaptiveEngineEloLabel();
+    updateCalibrationProgressUI();
     
     let total = savedErrors.length;
     $('#bundle-info').text(total > 0 ? `${total} errors guardats` : 'Cap error desat');
@@ -1719,6 +1791,10 @@ function updateStatsDisplay() {
 
 function updateEloChart() {
     const ctx = document.getElementById('elo-chart').getContext('2d');
+    if (isCalibrationActive()) {
+        if (eloChart) eloChart.destroy();
+        return;
+    }  
     if (eloHistory.length === 0) { eloHistory.push({ date: getToday(), elo: userELO }); saveStorage(); }
     const labels = eloHistory.map(entry => { const parts = entry.date.split('-'); return `${parts[2]}/${parts[1]}`; });
     const data = eloHistory.map(entry => entry.elo);
@@ -3066,8 +3142,9 @@ function setupEvents() {
                 leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
             };
             eloHistory = []; totalGamesPlayed = 0; totalWins = 0; maxStreak = 0;
-            adaptiveLevel = ADAPTIVE_CONFIG.DEFAULT_LEVEL;
-            aiDifficulty = levelToDifficulty(adaptiveLevel); recentGames = []; consecutiveWins = 0; consecutiveLosses = 0;
+            currentElo = clampEngineElo(userELO);
+            aiDifficulty = levelToDifficulty(currentElo); recentGames = []; consecutiveWins = 0; consecutiveLosses = 0;
+            isCalibrating = true; calibrationGames = [];
             currentLeague = null; leagueActiveMatch = null;
             reviewHistory = []; currentReview = []; gameHistory = [];
             saveStorage(); generateDailyMissions(); updateDisplay();
@@ -3500,7 +3577,7 @@ function startGame(isBundle, fen = null) {
     $('#game-screen').show();
     
     blunderMode = isBundle; 
-    isCalibrationGame = isCalibrationPhase && !isBundle && currentGameMode !== 'drill';
+    isCalibrationGame = isCalibrationActive() && !isBundle && currentGameMode !== 'drill';
     currentBundleFen = fen;
     lastHumanMoveUci = null;
     isBundleTop2Analysis = false;
@@ -3517,6 +3594,8 @@ function startGame(isBundle, fen = null) {
     updatePrecisionDisplay();
     updateAIPrecisionDisplay();
     updateAIPrecisionTarget();
+    updateCalibrationProgressUI();
+    updateEloDisplay();
     
     game = new Chess(fen || undefined); 
     
@@ -3568,7 +3647,10 @@ function startGame(isBundle, fen = null) {
 
     // Lògica de Modes
     if (isCalibrationGame) {
-        $('#engine-elo').text('Calibratge');
+        currentCalibrationOpponentElo = getCalibrationOpponentElo();
+        aiDifficulty = levelToDifficulty(currentCalibrationOpponentElo);
+        if (engineReady) applyEngineEloStrength(currentCalibrationOpponentElo);
+        $('#engine-elo').text(`ELO ${currentCalibrationOpponentElo}`);
         $('#game-mode-title').text('🎯 Partida de calibratge');
     } else if (currentGameMode === 'drill') {
         $('#engine-elo').text('Mestre');
@@ -3592,6 +3674,9 @@ function startGame(isBundle, fen = null) {
         $('#game-mode-title').text('♟ Nova partida');
         if (engineReady) applyEngineEloStrength(currentElo);
     }
+        if (!isCalibrationGame) {
+        currentCalibrationOpponentElo = null;
+    }   
     
     $('.square-55d63').removeClass('highlight-hint');
     clearEngineMoveHighlights();
@@ -3765,7 +3850,7 @@ function handleEngineMessage(msg) {
             const ok = accepted.length > 0 ? accepted.includes(played) : false;
 
             if (ok) {
-                if (pendingMoveEvaluation) { goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+                if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
                 handleBundleSuccess();
             } else {
                 if (pendingMoveEvaluation) {
@@ -3805,15 +3890,7 @@ function handleEngineMessage(msg) {
                 recentErrors.push(isError);
                 if (recentErrors.length > ERROR_WINDOW_N) recentErrors.shift();
                 if (recentErrors.length === ERROR_WINDOW_N) {
-                    const errorRate = recentErrors.reduce((sum, value) => sum + (value ? 1 : 0), 0) / ERROR_WINDOW_N;
-                    const previousElo = currentElo;
-                    if (errorRate > ERROR_TARGET + 0.05) currentElo -= STEP_ELO;
-                    else if (errorRate < ERROR_TARGET - 0.05) currentElo += STEP_ELO;
-                    currentElo = clampEngineElo(currentElo);
-                    if (currentElo !== previousElo) {
-                        applyEngineEloStrength(currentElo);
-                        updateAdaptiveEngineEloLabel();
-                    }
+                    recentErrors = recentErrors.slice(-ERROR_WINDOW_N);
                 }
                 saveStorage();
             }           
@@ -3828,7 +3905,7 @@ function handleEngineMessage(msg) {
                 $('#blunder-alert').removeClass('alert-low alert-med alert-high')
                     .addClass('alert-' + severity).show();
 
-                if (pendingMoveEvaluation) { registerCalibrationMove(false); pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+                 if (pendingMoveEvaluation) { pendingMoveEvaluation = false; updatePrecisionDisplay(); }
                 saveBlunderToBundle(lastPosition, severity);
 
                 engineMoveTimeout = setTimeout(() => {
@@ -3862,7 +3939,7 @@ function handleEngineMessage(msg) {
             setTimeout(() => {
                 isEngineThinking = false;
                 if (pendingMoveEvaluation && !$('#blunder-alert').is(':visible')) {
-                    goodMoves++; registerCalibrationMove(true); pendingMoveEvaluation = false; updatePrecisionDisplay();
+                    goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay();
                 }
                 game.move({ from: fromSq, to: toSq, promotion: promotion });
                 board.position(game.fen());
@@ -4220,6 +4297,7 @@ function handleGameOver(manualResign = false) {
     let leagueOutcome = 'draw';
     const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
     const calibrationGameWasActive = isCalibrationGame;
+    let calibrationJustCompleted = false;
     
     if (manualResign) { 
         msg = "T'has rendit."; resultScore = 0; leagueOutcome = 'loss'; 
@@ -4257,17 +4335,22 @@ function handleGameOver(manualResign = false) {
         }
     }
 
-    change = calculateEloDelta(resultScore);
-    msg += ` (${formatEloChange(change)})`;
-
+    if (!calibrationGameWasActive) {
+        change = calculateEloDelta(resultScore);
+        msg += ` (${formatEloChange(change)})`;
+    }
+    
     if (blunderMode && playerWon && currentBundleFen) { handleBundleSuccess(); return; }
     
-    userELO = Math.max(50, userELO + change); 
-    updateEloHistory(userELO);
+    if (!calibrationGameWasActive) {
+        userELO = Math.max(50, userELO + change); 
+        updateEloHistory(userELO);
+        syncEngineEloFromUser();
+    }
     
     if (calibrationGameWasActive) {
-        finalizeCalibrationFromPrecision(finalPrecision);
         isCalibrationGame = false;
+        calibrationJustCompleted = recordCalibrationGame(resultScore, finalPrecision);
     }
 
     if (!blunderMode && currentGameMode !== 'drill' && !calibrationGameWasActive) {
@@ -4311,6 +4394,9 @@ function handleGameOver(manualResign = false) {
         if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
     };
     showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
+    if (calibrationJustCompleted) {
+        showCalibrationReveal(userELO);
+    }
 }
 
 function setResultIndicator(outcome) {
@@ -4371,6 +4457,9 @@ $('#btn-dismiss-install').on('click', () => {
 $(document).ready(() => {
     updateDeviceType();
     loadStorage();
+    if (!isCalibrationActive()) {
+        syncEngineEloFromUser();
+    }
     void ensureBackupDirHandle({ prompt: false, mode: 'readwrite' });
     applyEpaperMode(loadEpaperPreference(), { skipSave: true });
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
