@@ -1997,14 +1997,45 @@ function extractTvGameFromPayload(payload) {
     return null;
 }
 
+let cachedTopPlayers = null;
+let topPlayersCacheTime = 0;
+const TOP_PLAYERS_CACHE_MS = 3600000; // 1 hora
+
+async function getTopPlayers() {
+    const now = Date.now();
+    if (cachedTopPlayers && (now - topPlayersCacheTime) < TOP_PLAYERS_CACHE_MS) {
+        return cachedTopPlayers;
+    }
+
+    const categories = ['classical', 'rapid', 'blitz', 'bullet'];
+    const allUsers = new Set();
+
+    for (const cat of categories) {
+        try {
+            const response = await fetch(`https://lichess.org/api/player/top/50/${cat}`);
+            if (!response.ok) continue;
+            const data = await response.json();
+            const users = data.users || [];
+            users.forEach(u => allUsers.add(u.username));
+        } catch (err) {}
+    }
+
+    if (allUsers.size > 0) {
+        cachedTopPlayers = Array.from(allUsers);
+        topPlayersCacheTime = now;
+    }
+
+    // Fallback si falla
+    return cachedTopPlayers || ['DrNykterstein', 'penguingim1', 'Fins0', 'lance5500'];
+}
+
 async function fetchLichessTvGame() {
-    const gmUsers = ['DrNykterstein', 'penguingim1', 'Zhigalko_Sergei', 'ChessWeeb', 'nihalsarin2004', 'Fins0', 'opperwezen', 'lance5500', 'Bombegansen'];
-    const user = gmUsers[Math.floor(Math.random() * gmUsers.length)];
+    const topPlayers = await getTopPlayers();
+    const user = topPlayers[Math.floor(Math.random() * topPlayers.length)];
     
     try {
-        // Descarreguem 30 partides i en triem una aleatòriament
         const response = await fetch(
-            `https://lichess.org/api/games/user/${user}?max=30&rated=true&finished=true&perfType=blitz,rapid,classical&clocks=false&evals=false`,
+            `https://lichess.org/api/games/user/${user}?max=100&finished=true&perfType=bullet,blitz,rapid,classical&clocks=false&evals=false`,
             {
                 headers: { 'Accept': 'application/x-chess-pgn' },
                 cache: 'no-store'
@@ -2015,12 +2046,19 @@ async function fetchLichessTvGame() {
         const allPgn = await response.text();
         if (!allPgn || allPgn.trim().length < 50) return null;
         
-        // Separar partides individuals
-        const games = allPgn.split(/\n(?=\[Event )/).filter(g => g.trim().length > 50);
+        const games = allPgn.split(/\n(?=\[Event )/).filter(g => g.trim().length > 100);
         if (!games.length) return null;
         
-        // Triar una partida aleatòria
-        const pgnText = games[Math.floor(Math.random() * games.length)];
+        // Filtrar partides amb mínim 20 jugades
+        const validGames = games.filter(pgn => {
+            const result = pgn.match(/\[Result\s+"([^"]+)"\]/);
+            if (!result || result[1] === '*') return false;
+            const moves = pgn.split(/\d+\.\s/).length - 1;
+            return moves >= 20;
+        });
+
+        if (!validGames.length) return null;
+        const pgnText = validGames[Math.floor(Math.random() * validGames.length)];
         
         const getHeader = (name) => {
             const match = pgnText.match(new RegExp(`\\[${name}\\s+"([^"]+)"\\]`));
