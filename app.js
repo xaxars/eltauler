@@ -620,74 +620,25 @@ let currentOpponent = null;
 let eloChart = null;
 let engineMoveTimeout = null;
 
-const MISSION_BASE_TARGETS = {
-    play1: 1,
-    play3: 3,
-    play5: 5,
-    win2: 2,
-    win4: 4,
-    bundle1: 1,
-    bundle3: 3,
-    precision70: 1,
-    precision85: 1,
-    blackwin: 1,
-    playLeague: 1,
-    playFree: 1,
-    bundleLow: 1,
-    bundleMed: 1,
-    bundleHigh: 1,
-    drill1: 1
-};
-
-function getMissionDifficultyScale() {
-    const minElo = 50;
-    const maxElo = 1200;
-    const normalized = Math.min(1, Math.max(0, (userELO - minElo) / (maxElo - minElo)));
-    return 0.65 + 0.35 * normalized;
-}
-
-function getMissionTarget(id) {
-    const base = MISSION_BASE_TARGETS[id] || 1;
-    const scaled = Math.round(base * getMissionDifficultyScale());
-    return Math.max(1, scaled);
-}
-
-function getMissionProgress(id) {
-    if (id === 'playLeague') return sessionStats.leagueGamesPlayed;
-    if (id === 'playFree') return sessionStats.freeGamesPlayed;
-    if (id === 'bundleLow') return sessionStats.bundlesSolvedLow;
-    if (id === 'bundleMed') return sessionStats.bundlesSolvedMed;
-    if (id === 'bundleHigh') return sessionStats.bundlesSolvedHigh;
-    if (id === 'drill1') return sessionStats.drillsSolved;
-
-    if (id.startsWith('play')) return sessionStats.gamesPlayed;
-    if (id.startsWith('win')) return sessionStats.gamesWon;
-    if (id.startsWith('bundle')) return sessionStats.bundlesSolved;
-    if (id === 'precision70') return sessionStats.highPrecisionGames;
-    if (id === 'precision85') return sessionStats.perfectGames;
-    if (id === 'blackwin') return sessionStats.blackWins;
-    return 0;
-}
-
 const MISSION_TEMPLATES = [
-       { id: 'play1', text: 'Juga 1 Partida', stars: 1, check: () => getMissionProgress('play1') >= getMissionTarget('play1') },
-    { id: 'playLeague', text: 'Juga 1 Lliga', stars: 1, check: () => getMissionProgress('playLeague') >= getMissionTarget('playLeague') },
-    { id: 'playFree', text: 'Juga 1 Lliure', stars: 1, check: () => getMissionProgress('playFree') >= getMissionTarget('playFree') },
-    { id: 'bundle1', text: 'Resol 1 Error', stars: 1, check: () => getMissionProgress('bundle1') >= getMissionTarget('bundle1') },
-    { id: 'drill1', text: 'Entrena 1 Final', stars: 1, check: () => getMissionProgress('drill1') >= getMissionTarget('drill1') },
-    { id: 'bundleLow', text: 'Resol 1 Lleu', stars: 1, check: () => getMissionProgress('bundleLow') >= getMissionTarget('bundleLow') },
-    { id: 'precision70', text: 'Precisió +70%', stars: 1, check: () => getMissionProgress('precision70') >= getMissionTarget('precision70') },
+    { id: 'play1', text: 'Juga 1 Partida', stars: 1, check: () => sessionStats.gamesPlayed >= 1 },
+    { id: 'playLeague', text: 'Juga 1 Lliga', stars: 1, check: () => sessionStats.leagueGamesPlayed >= 1 },
+    { id: 'playFree', text: 'Juga 1 Lliure', stars: 1, check: () => sessionStats.freeGamesPlayed >= 1 },
+    { id: 'bundle1', text: 'Resol 1 Error', stars: 1, check: () => sessionStats.bundlesSolved >= 1 },
+    { id: 'drill1', text: 'Entrena 1 Final', stars: 1, check: () => sessionStats.drillsSolved >= 1 },
+    { id: 'bundleLow', text: 'Resol 1 Lleu', stars: 1, check: () => sessionStats.bundlesSolvedLow >= 1 },
+    { id: 'precision70', text: 'Precisió +70%', stars: 1, check: () => sessionStats.highPrecisionGames >= 1 },
     
-      { id: 'play3', text: 'Juga 3 Partides', stars: 2, check: () => getMissionProgress('play3') >= getMissionTarget('play3') },
-    { id: 'win2', text: 'Guanya 2 partides', stars: 2, check: () => getMissionProgress('win2') >= getMissionTarget('win2') },
-    { id: 'bundle3', text: 'Resol 3 Errors', stars: 2, check: () => getMissionProgress('bundle3') >= getMissionTarget('bundle3') },
-    { id: 'bundleMed', text: 'Resol 1 Mitjà', stars: 2, check: () => getMissionProgress('bundleMed') >= getMissionTarget('bundleMed') },
-    { id: 'precision85', text: 'Precisió +85%', stars: 2, check: () => getMissionProgress('precision85') >= getMissionTarget('precision85') },
+    { id: 'play3', text: 'Juga 3 Partides', stars: 2, check: () => sessionStats.gamesPlayed >= 3 },
+    { id: 'win2', text: 'Guanya 2 partides', stars: 2, check: () => sessionStats.gamesWon >= 2 },
+    { id: 'bundle3', text: 'Resol 3 Errors', stars: 2, check: () => sessionStats.bundlesSolved >= 3 },
+    { id: 'bundleMed', text: 'Resol 1 Mitjà', stars: 2, check: () => sessionStats.bundlesSolvedMed >= 1 },
+    { id: 'precision85', text: 'Precisió +85%', stars: 2, check: () => sessionStats.perfectGames >= 1 },
     
-       { id: 'play5', text: 'Juga 5 Partides', stars: 3, check: () => getMissionProgress('play5') >= getMissionTarget('play5') },
-    { id: 'win4', text: 'Guanya 4 partides', stars: 3, check: () => getMissionProgress('win4') >= getMissionTarget('win4') },
-    { id: 'bundleHigh', text: 'Resol 1 Greu', stars: 3, check: () => getMissionProgress('bundleHigh') >= getMissionTarget('bundleHigh') },
-    { id: 'blackwin', text: 'Guanya amb Negres', stars: 3, check: () => getMissionProgress('blackwin') >= getMissionTarget('blackwin') }
+    { id: 'play5', text: 'Juga 5 Partides', stars: 3, check: () => sessionStats.gamesPlayed >= 5 },
+    { id: 'win4', text: 'Guanya 4 partides', stars: 3, check: () => sessionStats.gamesWon >= 4 },
+    { id: 'bundleHigh', text: 'Resol 1 Greu', stars: 3, check: () => sessionStats.bundlesSolvedHigh >= 1 },
+    { id: 'blackwin', text: 'Guanya amb Negres', stars: 3, check: () => sessionStats.blackWins >= 1 }
 ];
 
 const BADGES = [
@@ -1077,20 +1028,41 @@ function mulberry32(a) {
 }
 
 function updateMissionsDisplay() {
-    const accentClasses = ['mission-accent-1', 'mission-accent-2', 'mission-accent-3'];
-    todayMissions.forEach((mission, index) => {
+    const container = $('#missions-list'); container.empty();
+    const targets = { 
+        play1: 1, play3: 3, play5: 5, win2: 2, win4: 4, 
+        bundle1: 1, bundle3: 3, precision70: 1, precision85: 1, blackwin: 1,
+        playLeague: 1, playFree: 1, bundleLow: 1, bundleMed: 1, bundleHigh: 1,
+        drill1: 1
+    };
+    const getValue = (id) => {
+        if (id === 'playLeague') return sessionStats.leagueGamesPlayed;
+        if (id === 'playFree') return sessionStats.freeGamesPlayed;
+        if (id === 'bundleLow') return sessionStats.bundlesSolvedLow;
+        if (id === 'bundleMed') return sessionStats.bundlesSolvedMed;
+        if (id === 'bundleHigh') return sessionStats.bundlesSolvedHigh;
+        if (id === 'drill1') return sessionStats.drillsSolved;
+        
+        if (id.startsWith('play')) return sessionStats.gamesPlayed;
+        if (id.startsWith('win')) return sessionStats.gamesWon;
+        if (id.startsWith('bundle')) return sessionStats.bundlesSolved;
+        if (id === 'precision70') return sessionStats.highPrecisionGames;
+        if (id === 'precision85') return sessionStats.perfectGames;
+        if (id === 'blackwin') return sessionStats.blackWins;
+        return 0;
+    };
+    todayMissions.forEach((mission) => {
         const stars = '★'.repeat(mission.stars);
         const completedClass = mission.completed ? 'completed' : '';
-        const target = getMissionTarget(mission.id);
-        const target = getMissionTarget(mission.id);
-        const val = getMissionProgress(mission.id);
-        const stepsDone = Math.min(val, target);        
+        const target = targets[mission.id] || 1;
+        const val = getValue(mission.id);
+        const stepsDone = Math.min(val, target);
+        const trophies = '🏆'.repeat(stepsDone);
         const trophiesClass = stepsDone === 0 ? 'empty' : '';
         const progressText = mission.completed ? 'Fet' : `${stepsDone}/${target}`;
         container.append(
-        const accentClass = accentClasses[index % accentClasses.length];            `
-            <div class="mission-item ${completedClass}">
-            `<div class="mission-item ${completedClass} ${accentClass}">
+            `<div class="mission-item ${completedClass}">
+                <div class="mission-stars">${stars}</div>
                 <div class="mission-text">
                     <div class="mission-label">${mission.text}</div>
                     <div class="mission-progress">${progressText}</div>
