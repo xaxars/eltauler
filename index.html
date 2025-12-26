@@ -323,6 +323,9 @@
             gap: 12px;
             margin-top: 12px;
         }
+        .tv-actions {
+            margin-top: 12px;
+        }        
         .tv-card {
             background: rgba(0,0,0,0.25);
             border: 1px solid rgba(255,255,255,0.08);
@@ -384,6 +387,24 @@
             color: #333;
         }
         body.epaper-mode .tv-player strong { color: #111; }     
+        .tv-section .history-detail-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-gold);
+        }
+        .tv-section .history-detail-meta {
+            font-size: 0.95rem;
+        }
+        .tv-section .history-detail-meta strong {
+            font-size: 1.05rem;
+            color: var(--text-primary);
+        }
+        .tv-section .tv-players {
+            font-size: 0.95rem;
+        }
+        body.epaper-mode .tv-section .history-detail-title {
+            color: #222;
+        }        
         
         /* BUTTONS */
         .menu-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
@@ -1238,20 +1259,16 @@
             <div class="stats-header">
                 <div class="app-logo">📺</div>
                 <h1>TV</h1>
-                <div class="subtitle" id="tv-subtitle">ELO 2800 · Lichess TV (si està disponible) o partida aleatòria de la base de dades oberta.</div>
+                <div class="subtitle" id="tv-subtitle">Lichess TV (si està disponible) o partida aleatòria de la base de dades oberta.</div>
             </div>
             <div class="settings-panel">
-                <div class="settings-title">Nivells TV</div>
-                <div class="tv-grid">
-                    <div class="tv-card gold" data-elo="2800">ELO <strong>2800</strong></div>
-                    <div class="tv-card purple" data-elo="2700">ELO <strong>2700</strong></div>
-                    <div class="tv-card blue" data-elo="2600">ELO <strong>2600</strong></div>
-                    <div class="tv-card green" data-elo="2500">ELO <strong>2500</strong></div>
-                     <div class="tv-card steel" data-elo="2400">ELO <strong>2400</strong></div>
+                <div class="settings-title">Partida aleatòria</div>
+                <div class="tv-actions">
+                    <button class="btn btn-primary" id="tv-random">🎲 Tindré sort</button>
                 </div>
             </div>
             <div class="history-section tv-section">
-                <div class="history-title" id="tv-title">ELO 2800 · Reproducció</div>
+                <div class="history-title" id="tv-title">Reproducció TV</div>
                 <div class="history-layout" style="grid-template-columns: 1fr;">
                     <div class="history-detail">
                         <div class="history-detail-header">
