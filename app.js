@@ -346,13 +346,13 @@ function resizeTvBoardToViewport() {
 
     const rect = container.getBoundingClientRect();
     let size = Math.floor(rect.width);
+    const availableHeight = window.innerHeight - rect.top - 24;
 
-    const isPortrait = window.innerHeight >= window.innerWidth;
-    if (window.innerWidth <= 520 && isPortrait) {
-        size = Math.floor(window.innerWidth - 32);
+       if (availableHeight > 0) {
+        size = Math.min(size, Math.floor(availableHeight));
     }
 
-    size = Math.max(220, size);
+    size = Math.max(240, size);
     boardEl.style.width = `${size}px`;
     boardEl.style.height = `${size}px`;
 
