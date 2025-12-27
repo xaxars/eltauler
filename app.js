@@ -291,15 +291,8 @@ async function verifyHandlePermission(handle, mode = 'readwrite') {
     return status;
 }
 
-async function ensureBackupDirHandle({ prompt = false, mode = 'readwrite' } = {}) {
-    if (!backupDirHandle) {
-        backupDirHandle = await loadBackupDirHandle();
-    }
-    if (backupDirHandle) {
-        const status = await verifyHandlePermission(backupDirHandle, mode);
-        if (status === 'granted') return backupDirHandle;
-    }
-    if (!prompt || !supportsDirectoryPicker()) return null;
+async function selectBackupDirHandle(mode = 'readwrite') {
+    if (!supportsDirectoryPicker()) return null;
     try {
         const handle = await window.showDirectoryPicker({ id: 'eltauler-backups', mode });
         backupDirHandle = handle;
@@ -314,8 +307,24 @@ async function ensureBackupDirHandle({ prompt = false, mode = 'readwrite' } = {}
     }
 }
 
-async function writeBackupToDirectory(data, filename, { prompt = true } = {}) {
-    const handle = await ensureBackupDirHandle({ prompt, mode: 'readwrite' });
+async function ensureBackupDirHandle({ prompt = false, mode = 'readwrite', force = false } = {}) {
+    if (!force && !backupDirHandle) {
+        backupDirHandle = await loadBackupDirHandle();
+    }
+    if (!force && backupDirHandle) {
+        const status = await verifyHandlePermission(backupDirHandle, mode);
+        if (status === 'granted') return backupDirHandle;
+    }
+    if (!prompt || !supportsDirectoryPicker()) return null;
+    return selectBackupDirHandle(mode);
+}
+
+async function writeBackupToDirectory(data, filename, { prompt = true, forceDirectorySelection = false } = {}) {
+    const handle = await ensureBackupDirHandle({
+        prompt,
+        mode: 'readwrite',
+        force: forceDirectorySelection
+    });
     if (!handle) return null;
     const fileHandle = await handle.getFileHandle(filename, { create: true });
     const writable = await fileHandle.createWritable();
@@ -3199,7 +3208,7 @@ function setupEvents() {
    const data = buildBackupData();
         const filename = `eltauler_backup_${totalStars}stars.json`;
         if (supportsDirectoryPicker()) {
-            const savedFile = await writeBackupToDirectory(data, filename);
+            const savedFile = await writeBackupToDirectory(data, filename, { forceDirectorySelection: true });
             if (savedFile) {
                 alert('Backup guardat a la carpeta seleccionada.');
             }
