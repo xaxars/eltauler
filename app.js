@@ -36,7 +36,6 @@ let tvJeroglyphicsActualMove = null;
 let tvJeroglyphicsResumePlayback = false;
 let tvJeroglyphicsSolved = false;
 let tvJeroglyphicsIncorrect = false;
-let eloBadgeTimer = null;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -1540,36 +1539,11 @@ function estimateCalibrationElo() {
     return clampEngineElo(Math.round(baseElo + precisionAdjust));
 }
 
-function animateCounter(element, targetValue, duration) {
-    if (!element) return;
-    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const safeTarget = Math.max(0, Math.round(targetValue || 0));
-    if (prefersReduced) {
-        element.textContent = safeTarget;
-        return;
-    }
-    const startTime = performance.now();
-    const formatter = new Intl.NumberFormat('ca-ES');
-    const tick = (now) => {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const current = Math.round(safeTarget * progress);
-        element.textContent = formatter.format(current);
-        if (progress < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-}
-
 function showCalibrationReveal(eloValue) {
-    const modal = $('#calibration-reveal-modal');
-    const valueEl = document.getElementById('revealed-elo-value');
-    if (!modal.length || !valueEl) return;
-    valueEl.textContent = '0';
-    valueEl.classList.remove('counter-animate');
-    void valueEl.offsetWidth;
-    valueEl.classList.add('counter-animate');
-    animateCounter(valueEl, eloValue, 2000);
-    modal.css('display', 'flex');
+    const statusEl = $('#status');
+    if (!statusEl.length) return;
+    statusEl.text(`El teu nivell: ${eloValue} ELO`).addClass('elo-reveal');
+    setTimeout(() => statusEl.removeClass('elo-reveal'), 2200);
 }
 
 function finalizeCalibrationFromGames() {
@@ -1857,8 +1831,8 @@ function updateEloHistory(newElo) {
 }
 
 function updateAdaptiveEngineEloLabel() {
-     if (isCalibrationGame) {
-        $('#engine-elo').text('Calibratge');
+     if (isCalibrationGame && typeof currentCalibrationOpponentElo === 'number') {
+        $('#engine-elo').text(`ELO ${currentCalibrationOpponentElo}`);
         return;
     }
     if (isCalibrationActive()) {
@@ -1894,49 +1868,12 @@ function updateEloDisplay() {
     $('#game-elo').text(displayValue);
 }
 
-function updateFlowIndicator() {
-    const indicator = $('#flow-indicator');
-    if (!indicator.length) return;
-    if (recentGames.length >= 5) {
-        const recentSlice = recentGames.slice(-10);
-        const wins = recentSlice.filter(game => game.result === 1).length;
-        const winRate = recentSlice.length > 0 ? (wins / recentSlice.length) : 0.5;
-        if (winRate >= 0.4 && winRate <= 0.6) {
-            indicator.removeClass('flow-warning').addClass('flow-optimal');
-            indicator.text('🟢 Zona òptima');
-        } else {
-            indicator.removeClass('flow-optimal').addClass('flow-warning');
-            indicator.text('🟡 Ajustant...');
-        }
-    } else {
-        indicator.removeClass('flow-optimal').addClass('flow-warning');
-        indicator.text('🟡 Ajustant...');
-    }
-}
-
-function showEloChangeBadge(delta) {
-    const badge = $('#elo-change-badge');
-    if (!badge.length) return;
-    if (typeof delta !== 'number' || delta === 0) {
-        badge.removeClass('show elo-gain elo-loss');
-        return;
-    }
-    badge.removeClass('elo-gain elo-loss').addClass(delta > 0 ? 'elo-gain' : 'elo-loss');
-    badge.text(formatEloChange(delta));
-    badge.addClass('show');
-    if (eloBadgeTimer) clearTimeout(eloBadgeTimer);
-    eloBadgeTimer = setTimeout(() => {
-        badge.removeClass('show elo-gain elo-loss');
-    }, 3000);
-}
-
 function updateDisplay() {
     engineELO = Math.round(currentElo);  
     updateEloDisplay();
     $('#current-stars').text(totalStars); $('#game-stars').text(totalStars);
     updateAdaptiveEngineEloLabel();
     updateCalibrationProgressUI();
-    updateFlowIndicator();
     
     let total = savedErrors.length;
     $('#bundle-info').text(total > 0 ? `${total} errors guardats` : 'Cap error desat');
@@ -1949,59 +1886,8 @@ function updateStatsDisplay() {
     $('#stats-total-wins').text(totalWins);
     $('#stats-bundles-count').text(savedErrors.length);
     $('#stats-max-streak').text(maxStreak);
-    renderRecentPerformance();
     updateEloChart();
     updateReviewChart();
-}
-
-function getOutcomeLabel(entry) {
-    if (!entry) return 'draw';
-    if (entry.outcome) return entry.outcome;
-    const result = (entry.result || '').toLowerCase();
-    if (result.includes('victòria') || result.includes('victoria')) return 'win';
-    if (result.includes('derrota') || result.includes('rendit')) return 'loss';
-    if (result.includes('taules')) return 'draw';
-    return 'draw';
-}
-
-function renderRecentPerformance() {
-    const barsContainer = $('#recent-performance-bars');
-    if (!barsContainer.length) return;
-    const recent = gameHistory.slice(-10);
-    if (!recent.length) {
-        barsContainer.html('<div class="history-empty">Encara no hi ha partides recents.</div>');
-        $('#recent-winrate').text('0%');
-        $('#recent-winrate-fill').css('width', '0%');
-        $('#recent-trend-icon').text('➡️');
-        return;
-    }
-
-    let wins = 0;
-    let losses = 0;
-    let draws = 0;
-    const barsHtml = recent.map(entry => {
-        const outcome = getOutcomeLabel(entry);
-        if (outcome === 'win') wins++;
-        else if (outcome === 'loss') losses++;
-        else draws++;
-        return `<div class="recent-bar ${outcome}" title="${outcome === 'win' ? 'Victòria' : outcome === 'loss' ? 'Derrota' : 'Taules'}"></div>`;
-    }).join('');
-    barsContainer.html(barsHtml);
-
-    const total = wins + losses + draws;
-    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-    $('#recent-winrate').text(`${winRate}%`);
-    $('#recent-winrate-fill').css('width', `${winRate}%`);
-
-    let trendIcon = '➡️';
-    const referenceEntry = gameHistory.length >= 6 ? gameHistory[gameHistory.length - 6] : null;
-    const referenceElo = referenceEntry && typeof referenceEntry.elo === 'number' ? referenceEntry.elo : null;
-    if (typeof referenceElo === 'number') {
-        const delta = userELO - referenceElo;
-        if (delta > 15) trendIcon = '↗️';
-        else if (delta < -15) trendIcon = '↘️';
-    }
-    $('#recent-trend-icon').text(trendIcon);
 }
 
 function updateEloChart() {
@@ -3193,7 +3079,7 @@ function showHistoryReview(entry) {
     showPostGameReview(msg, precision, counts, null, { showCheckmate: false });
 }
 
-function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
+function recordGameHistory(resultLabel, finalPrecision, counts) {
     if (blunderMode || currentGameMode === 'drill') return;
     const moves = game.history();
     const now = new Date();
@@ -3223,8 +3109,6 @@ function setupEvents() {
     checkShareSupport();
     $('#btn-new-game').click(() => {
         currentGameMode = 'free';
-        outcome: options.outcome || null,
-        elo: typeof options.elo === 'number' ? options.elo : null,  
         currentOpponent = null;
         if (leagueActiveMatch) { leagueActiveMatch = null; saveStorage(); }
         startGame(false);
@@ -3234,7 +3118,6 @@ function setupEvents() {
     $('#btn-league-banner-play').on('click', (e) => { e.stopPropagation(); startLeagueRound(); });
 
     $('#btn-badges').click(() => { updateBadgesModal(); $('#badges-modal').css('display', 'flex'); });
-    $('#btn-calibration-reveal-close').click(() => { $('#calibration-reveal-modal').hide(); });    
     
     $('#btn-stats').click(() => { $('#start-screen').hide(); $('#stats-screen').show(); updateStatsDisplay(); });
     $('#btn-history').click(() => {
@@ -3868,7 +3751,7 @@ function startGame(isBundle, fen = null) {
         currentCalibrationOpponentElo = getCalibrationOpponentElo();
         aiDifficulty = levelToDifficulty(currentCalibrationOpponentElo);
         if (engineReady) applyEngineEloStrength(currentCalibrationOpponentElo);
-        updateAdaptiveEngineEloLabel();
+        $('#engine-elo').text(`ELO ${currentCalibrationOpponentElo}`);
         $('#game-mode-title').text('🎯 Partida de calibratge');
     } else if (currentGameMode === 'drill') {
         $('#engine-elo').text('Mestre');
@@ -4580,16 +4463,10 @@ function handleGameOver(manualResign = false) {
     }
     
     const reviewCounts = summarizeReview(currentReview);
-    const outcome = resultScore === 1 ? 'win' : resultScore === 0 ? 'loss' : 'draw';
-    recordGameHistory(msg, finalPrecision, reviewCounts, { outcome: outcome, elo: userELO });
+    recordGameHistory(msg, finalPrecision, reviewCounts);
     persistReviewSummary(finalPrecision, msg);
     recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
     $('#status').text(msg);
-
-    if (!calibrationGameWasActive) {
-        showEloChangeBadge(change);
-    }
-    updateFlowIndicator();
     
     // Gestió de l'indicador de resultat
     if (leagueOutcome === 'win') setResultIndicator('win');
