@@ -1432,6 +1432,7 @@ function nivellCalibratgeFromElo(elo) {
 function obtenirNivellActual() {
     if (typeof TaulerCalibratge !== 'undefined' && TaulerCalibratge?.obtenirEstat) {
         const estat = TaulerCalibratge.obtenirEstat();
+        if (estat && estat.calibratge !== 'completat') return '_';
         if (estat && typeof estat.nivell === 'number') return estat.nivell;
     }
     return nivellCalibratgeFromElo(userELO);
