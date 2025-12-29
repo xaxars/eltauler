@@ -1,1 +1,1 @@
-Borrat 30
+Recuperar diamants
