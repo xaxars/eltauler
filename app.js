@@ -703,6 +703,7 @@ function enableTapToMove() {
     $('#myBoard').off('.tapmove')
         .on(`pointerdown.tapmove touchstart.tapmove`, '.square-55d63', function(e) {
         if (!game || game.game_over() || isEngineThinking) return;
+        if (game.turn() !== playerColor) return;
 
         if (e && e.preventDefault) e.preventDefault();
 
@@ -3821,6 +3822,7 @@ function startGame(isBundle, fen = null) {
 
 function onDragStart(source, piece, position, orientation) {
     if (game.game_over() || isEngineThinking) return false;
+    if (game.turn() !== playerColor) return false;
     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || 
         (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
     if ((currentGameMode === 'drill' || blunderMode) && game.turn() !== playerColor) return false;
