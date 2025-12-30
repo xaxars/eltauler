@@ -2288,12 +2288,673 @@ function updateEloChart() {
     });
 }
 
-function classifyMoveQuality(swing) {
-    if (swing <= 30) return 'excel';
-    if (swing <= 80) return 'good';
-    if (swing <= 200) return 'inaccuracy';
-    if (swing <= 600) return 'mistake';
+function classifyMoveQuality(swing, playerMove = null, bestMove = null) {
+    if (playerMove && bestMove && playerMove === bestMove) return 'excel';
+    if (swing === null || swing === undefined || Number.isNaN(swing)) return 'unknown';
+    const absSwing = Math.abs(swing);
+    const useEnrichedThresholds = Boolean(playerMove || bestMove);
+
+    if (useEnrichedThresholds) {
+        if (absSwing <= 25) return 'excel';
+        if (absSwing <= 50) return 'good';
+        if (absSwing <= 100) return 'inaccuracy';
+        if (absSwing <= 300) return 'mistake';
+        return 'blunder';
+    }
+
+    if (absSwing <= 30) return 'excel';
+    if (absSwing <= 80) return 'good';
+    if (absSwing <= 200) return 'inaccuracy';
+    if (absSwing <= 600) return 'mistake';
     return 'blunder';
+}
+
+function initStockfishEnriched(stockfishInstance, multiPvCount = 3) {
+    stockfishInstance.postMessage('uci');
+    stockfishInstance.postMessage(`setoption name MultiPV value ${multiPvCount}`);
+    stockfishInstance.postMessage('isready');
+}
+
+function parseUciInfo(line) {
+    if (!line.startsWith('info') || !line.includes(' pv ')) return null;
+
+    const info = {
+        depth: null,
+        seldepth: null,
+        multipv: 1,
+        score: null,
+        scoreType: 'cp',
+        nodes: null,
+        nps: null,
+        time: null,
+        pv: []
+    };
+
+    const depthMatch = line.match(/\bdepth (\d+)/);
+    if (depthMatch) info.depth = Number.parseInt(depthMatch[1], 10);
+
+    const seldepthMatch = line.match(/\bseldepth (\d+)/);
+    if (seldepthMatch) info.seldepth = Number.parseInt(seldepthMatch[1], 10);
+
+    const multipvMatch = line.match(/\bmultipv (\d+)/);
+    if (multipvMatch) info.multipv = Number.parseInt(multipvMatch[1], 10);
+
+    const scoreCpMatch = line.match(/\bscore cp (-?\d+)/);
+    if (scoreCpMatch) {
+        info.score = Number.parseInt(scoreCpMatch[1], 10);
+        info.scoreType = 'cp';
+    }
+
+    const scoreMateMatch = line.match(/\bscore mate (-?\d+)/);
+    if (scoreMateMatch) {
+        info.score = Number.parseInt(scoreMateMatch[1], 10);
+        info.scoreType = 'mate';
+    }
+
+    const nodesMatch = line.match(/\bnodes (\d+)/);
+    if (nodesMatch) info.nodes = Number.parseInt(nodesMatch[1], 10);
+
+    const npsMatch = line.match(/\bnps (\d+)/);
+    if (npsMatch) info.nps = Number.parseInt(npsMatch[1], 10);
+
+    const timeMatch = line.match(/\btime (\d+)/);
+    if (timeMatch) info.time = Number.parseInt(timeMatch[1], 10);
+
+    const pvMatch = line.match(/ pv (.+)$/);
+    if (pvMatch) {
+        info.pv = pvMatch[1].trim().split(/\s+/);
+    }
+
+    return info;
+}
+
+class EnrichedAnalysis {
+    constructor(fen, targetDepth = 20, multiPvCount = 3) {
+        this.fen = fen;
+        this.targetDepth = targetDepth;
+        this.multiPvCount = multiPvCount;
+        this.alternatives = new Map();
+        this.maxDepthReached = 0;
+        this.isComplete = false;
+    }
+
+    processLine(line) {
+        const info = parseUciInfo(line);
+        if (!info || info.depth === null) return;
+
+        const existing = this.alternatives.get(info.multipv);
+        if (!existing || info.depth >= existing.depth) {
+            this.alternatives.set(info.multipv, info);
+        }
+
+        if (info.depth > this.maxDepthReached) {
+            this.maxDepthReached = info.depth;
+        }
+    }
+
+    complete() {
+        this.isComplete = true;
+    }
+
+    getAlternatives() {
+        return Array.from(this.alternatives.values())
+            .sort((a, b) => a.multipv - b.multipv)
+            .map((info) => ({
+                move: info.pv[0] || null,
+                eval: info.score,
+                evalType: info.scoreType,
+                depth: info.depth,
+                pv: info.pv
+            }));
+    }
+
+    getBestMove() {
+        const best = this.alternatives.get(1);
+        if (!best) return null;
+
+        return {
+            move: best.pv[0] || null,
+            eval: best.score,
+            evalType: best.scoreType,
+            depth: best.depth,
+            pv: best.pv
+        };
+    }
+}
+
+function analyzePositionEnriched(stockfishInstance, fen, depth = 20, multiPv = 3) {
+    return new Promise((resolve) => {
+        const analysis = new EnrichedAnalysis(fen, depth, multiPv);
+        let timeoutId = null;
+
+        const cleanup = () => {
+            stockfishInstance.removeEventListener('message', messageHandler);
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        };
+
+        const messageHandler = (event) => {
+            const line = event.data;
+            if (typeof line !== 'string') return;
+
+            if (line.startsWith('info')) {
+                analysis.processLine(line);
+            }
+
+            if (line.startsWith('bestmove')) {
+                cleanup();
+                analysis.complete();
+                resolve({
+                    fen,
+                    depth: analysis.maxDepthReached,
+                    bestMove: analysis.getBestMove(),
+                    alternatives: analysis.getAlternatives()
+                });
+            }
+        };
+
+        timeoutId = setTimeout(() => {
+            cleanup();
+            analysis.complete();
+            resolve({
+                fen,
+                depth: analysis.maxDepthReached,
+                bestMove: analysis.getBestMove(),
+                alternatives: analysis.getAlternatives(),
+                timedOut: true
+            });
+        }, 30000);
+
+        stockfishInstance.addEventListener('message', messageHandler);
+        try { stockfishInstance.postMessage(`setoption name MultiPV value ${multiPv}`); } catch (e) {}
+        stockfishInstance.postMessage(`position fen ${fen}`);
+        stockfishInstance.postMessage(`go depth ${depth}`);
+    });
+}
+
+function uciToSan(fen, uciMove) {
+    if (typeof Chess === 'undefined') return uciMove;
+    const chess = new Chess(fen);
+    const move = chess.move({
+        from: uciMove.slice(0, 2),
+        to: uciMove.slice(2, 4),
+        promotion: uciMove.length > 4 ? uciMove[4] : undefined
+    });
+    return move ? move.san : uciMove;
+}
+
+function pvToSan(fen, pvArray) {
+    if (typeof Chess === 'undefined') return pvArray;
+    const chess = new Chess(fen);
+    const sanMoves = [];
+    for (const uciMove of pvArray) {
+        const move = chess.move({
+            from: uciMove.slice(0, 2),
+            to: uciMove.slice(2, 4),
+            promotion: uciMove.length > 4 ? uciMove[4] : undefined
+        });
+        sanMoves.push(move ? move.san : uciMove);
+        if (!move) break;
+    }
+    return sanMoves;
+}
+
+function createEnrichedMoveReview(
+    fen,
+    playerMove,
+    playerMoveSan,
+    analysisBefore,
+    analysisAfter,
+    moveNumber
+) {
+    const bestMove = analysisBefore.bestMove;
+    const evalBefore = bestMove ? bestMove.eval : null;
+    const evalAfter = analysisAfter.bestMove ? analysisAfter.bestMove.eval : null;
+
+    let swing = null;
+    if (evalBefore !== null && evalAfter !== null) {
+        swing = Math.abs(evalAfter - evalBefore);
+    }
+
+    const quality = classifyMoveQuality(swing, playerMove, bestMove?.move);
+
+    return {
+        fen,
+        moveNumber,
+        playerMove,
+        playerMoveSan,
+        bestMove: bestMove?.move || null,
+        evalBefore,
+        evalAfter,
+        swing,
+        quality,
+        isCapture: playerMoveSan.includes('x'),
+        isCheck: playerMoveSan.includes('+') || playerMoveSan.includes('#'),
+        timestamp: Date.now(),
+        depth: analysisBefore.depth,
+        bestMoveSan: bestMove?.move ? uciToSan(fen, bestMove.move) : null,
+        bestMovePv: bestMove?.pv || [],
+        bestMovePvSan: bestMove?.pv ? pvToSan(fen, bestMove.pv) : [],
+        alternatives: (analysisBefore.alternatives || []).map((alt) => ({
+            move: alt.move,
+            moveSan: alt.move ? uciToSan(fen, alt.move) : null,
+            eval: alt.eval,
+            evalType: alt.evalType,
+            pv: alt.pv,
+            pvSan: alt.pv ? pvToSan(fen, alt.pv) : []
+        }))
+    };
+}
+
+function parseFenPosition(fen) {
+    const [board, turn, castling, enPassant] = fen.split(' ');
+    const expandedBoard = expandBoard(board);
+    const whiteKing = findPiece(expandedBoard, 'K');
+    const blackKing = findPiece(expandedBoard, 'k');
+    const material = countMaterial(expandedBoard);
+    const passedPawns = findPassedPawns(expandedBoard);
+    const kingSafety = evaluateKingSafety(expandedBoard, whiteKing, blackKing, castling);
+
+    return {
+        turn,
+        castling,
+        enPassant,
+        whiteKing,
+        blackKing,
+        material,
+        passedPawns,
+        kingSafety,
+        expandedBoard
+    };
+}
+
+function expandBoard(boardFen) {
+    const board = [];
+    const rows = boardFen.split('/');
+
+    for (const row of rows) {
+        for (const char of row) {
+            if (char >= '1' && char <= '8') {
+                for (let i = 0; i < Number.parseInt(char, 10); i++) {
+                    board.push(null);
+                }
+            } else {
+                board.push(char);
+            }
+        }
+    }
+
+    return board;
+}
+
+function findPiece(board, piece) {
+    const index = board.indexOf(piece);
+    if (index === -1) return null;
+
+    const file = String.fromCharCode(97 + (index % 8));
+    const rank = 8 - Math.floor(index / 8);
+    return `${file}${rank}`;
+}
+
+function findAllPieces(board, piece) {
+    const positions = [];
+    for (let i = 0; i < board.length; i++) {
+        if (board[i] === piece) {
+            const file = String.fromCharCode(97 + (i % 8));
+            const rank = 8 - Math.floor(i / 8);
+            positions.push(`${file}${rank}`);
+        }
+    }
+    return positions;
+}
+
+function countMaterial(board) {
+    const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+    let white = 0;
+    let black = 0;
+
+    const whitePieces = { P: 0, N: 0, B: 0, R: 0, Q: 0 };
+    const blackPieces = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+
+    for (const piece of board) {
+        if (!piece) continue;
+
+        if (piece === piece.toUpperCase()) {
+            white += values[piece.toLowerCase()] || 0;
+            if (whitePieces[piece] !== undefined) whitePieces[piece] += 1;
+        } else {
+            black += values[piece] || 0;
+            if (blackPieces[piece] !== undefined) blackPieces[piece] += 1;
+        }
+    }
+
+    return {
+        white,
+        black,
+        balance: white - black,
+        whitePieces,
+        blackPieces
+    };
+}
+
+function findPassedPawns(board) {
+    const passed = { white: [], black: [] };
+
+    for (let i = 0; i < 64; i++) {
+        const piece = board[i];
+        const file = i % 8;
+        const rank = Math.floor(i / 8);
+
+        if (piece === 'P') {
+            let isPassed = true;
+            for (let r = rank - 1; r >= 0 && isPassed; r--) {
+                for (let f = Math.max(0, file - 1); f <= Math.min(7, file + 1); f++) {
+                    if (board[r * 8 + f] === 'p') isPassed = false;
+                }
+            }
+            if (isPassed && rank <= 5) {
+                const square = `${String.fromCharCode(97 + file)}${8 - rank}`;
+                passed.white.push(square);
+            }
+        }
+
+        if (piece === 'p') {
+            let isPassed = true;
+            for (let r = rank + 1; r < 8 && isPassed; r++) {
+                for (let f = Math.max(0, file - 1); f <= Math.min(7, file + 1); f++) {
+                    if (board[r * 8 + f] === 'P') isPassed = false;
+                }
+            }
+            if (isPassed && rank >= 2) {
+                const square = `${String.fromCharCode(97 + file)}${8 - rank}`;
+                passed.black.push(square);
+            }
+        }
+    }
+
+    return passed;
+}
+
+function evaluateKingSafety(board, whiteKing, blackKing, castling) {
+    const safety = {
+        white: { canCastle: false, hasCastled: false, exposed: false },
+        black: { canCastle: false, hasCastled: false, exposed: false }
+    };
+
+    safety.white.canCastle = castling.includes('K') || castling.includes('Q');
+    safety.black.canCastle = castling.includes('k') || castling.includes('q');
+
+    if (whiteKing === 'g1' || whiteKing === 'c1') safety.white.hasCastled = true;
+    if (blackKing === 'g8' || blackKing === 'c8') safety.black.hasCastled = true;
+
+    const exposedFiles = ['d', 'e', 'f'];
+    if (whiteKing && exposedFiles.includes(whiteKing[0]) && !safety.white.canCastle) {
+        safety.white.exposed = true;
+    }
+    if (blackKing && exposedFiles.includes(blackKing[0]) && !safety.black.canCastle) {
+        safety.black.exposed = true;
+    }
+
+    return safety;
+}
+
+function analyzePvThreats(fen, pv) {
+    if (!pv || pv.length === 0) {
+        return { threats: [], themes: [], immediateThreats: [] };
+    }
+
+    const threats = [];
+    const themes = new Set();
+    const immediateThreats = [];
+
+    for (let i = 0; i < Math.min(pv.length, 6); i++) {
+        const move = pv[i];
+        const moveInfo = parseUciMove(move);
+
+        if (i === 0 && isLikelyCapture(fen, move)) {
+            immediateThreats.push({
+                type: 'capture',
+                move,
+                description: `Captura a ${moveInfo.to}`
+            });
+            themes.add('material');
+        }
+
+        if (moveInfo.promotion) {
+            threats.push({
+                type: 'promotion',
+                move,
+                piece: moveInfo.promotion,
+                ply: i + 1
+            });
+            themes.add('promotion');
+        }
+    }
+
+    const forkPattern = detectForkPattern(pv);
+    if (forkPattern) {
+        themes.add('fork');
+        threats.push(forkPattern);
+    }
+
+    const checkCount = countChecksInPv(fen, pv);
+    if (checkCount >= 2) {
+        themes.add('king_attack');
+        threats.push({
+            type: 'king_attack',
+            checks: checkCount,
+            description: 'Atac persistent al rei'
+        });
+    }
+
+    return {
+        threats,
+        themes: Array.from(themes),
+        immediateThreats
+    };
+}
+
+function parseUciMove(uciMove) {
+    return {
+        from: uciMove.slice(0, 2),
+        to: uciMove.slice(2, 4),
+        promotion: uciMove.length > 4 ? uciMove[4] : null
+    };
+}
+
+function isLikelyCapture(fen, uciMove) {
+    const board = expandBoard(fen.split(' ')[0]);
+    const to = parseUciMove(uciMove).to;
+    const toIndex = squareToIndex(to);
+    return board[toIndex] !== null;
+}
+
+function squareToIndex(square) {
+    const file = square.charCodeAt(0) - 97;
+    const rank = Number.parseInt(square[1], 10);
+    return (8 - rank) * 8 + file;
+}
+
+function detectForkPattern(pv) {
+    if (pv.length < 3) return null;
+
+    const move1 = pv[0];
+    const move3 = pv[2];
+
+    if (move1 && move3 && move1.slice(2, 4) === move3.slice(0, 2)) {
+        return {
+            type: 'fork',
+            knightMove: move1,
+            capture: move3,
+            description: `Possible forquilla: ${move1} seguida de ${move3}`
+        };
+    }
+
+    return null;
+}
+
+function countChecksInPv(fen, pv) {
+    if (typeof Chess === 'undefined') return 0;
+    const chess = new Chess(fen);
+    let checks = 0;
+
+    for (const uciMove of pv) {
+        const move = chess.move({
+            from: uciMove.slice(0, 2),
+            to: uciMove.slice(2, 4),
+            promotion: uciMove.length > 4 ? uciMove[4] : undefined
+        });
+        if (!move) break;
+        if (move.san && move.san.includes('+')) checks += 1;
+    }
+
+    return checks;
+}
+
+function generateHieroglyphics(moveReview, positionInfo, pvAnalysis) {
+    const result = {
+        moveSymbol: '',
+        positionSymbol: '',
+        themeSymbols: [],
+        explanations: []
+    };
+
+    result.moveSymbol = getMoveQualitySymbol(moveReview);
+    result.positionSymbol = getPositionEvalSymbol(moveReview.evalAfter);
+
+    if (pvAnalysis.themes.includes('king_attack')) {
+        result.themeSymbols.push('→');
+        result.explanations.push('Atac directe al rei');
+    }
+
+    if (pvAnalysis.immediateThreats.length > 0) {
+        result.themeSymbols.push('↑');
+        result.explanations.push('Iniciativa amb amenaces');
+    }
+
+    if (pvAnalysis.threats.length > 0) {
+        result.themeSymbols.push('Δ');
+        const threat = pvAnalysis.threats[0];
+        result.explanations.push(`Amenaça: ${threat.description || threat.type}`);
+    }
+
+    if (pvAnalysis.themes.includes('promotion')) {
+        result.themeSymbols.push('⇑');
+        result.explanations.push('Amenaça de promoció');
+    }
+
+    if (pvAnalysis.themes.includes('fork')) {
+        result.themeSymbols.push('⑂');
+        result.explanations.push('Tema de forquilla');
+    }
+
+    if (positionInfo.material.balance < -2 && moveReview.evalAfter > 0) {
+        result.themeSymbols.push('⇆');
+        result.explanations.push('Compensació per material');
+    }
+
+    if (Math.abs((moveReview.evalBefore || 0) - (moveReview.evalAfter || 0)) > 200 &&
+        moveReview.quality === 'inaccuracy') {
+        result.themeSymbols.push('⊕');
+        result.explanations.push('Posició complicada');
+    }
+
+    const turn = positionInfo.turn;
+    const enemySafety = turn === 'w' ? positionInfo.kingSafety.black : positionInfo.kingSafety.white;
+    if (enemySafety.exposed) {
+        result.themeSymbols.push('⊙');
+        result.explanations.push('Rei enemic exposat');
+    }
+
+    return result;
+}
+
+function getMoveQualitySymbol(moveReview) {
+    const { swing, quality, playerMove, bestMove } = moveReview;
+
+    if (playerMove && bestMove && playerMove === bestMove) return '!!';
+    if (swing === null || swing === undefined) return '';
+
+    if (swing <= 10) return '!';
+    if (swing <= 25) return '';
+    if (swing <= 50) return '!?';
+    if (swing <= 100) return '?!';
+    if (swing <= 300) return '?';
+    if (quality === 'blunder') return '??';
+    return '';
+}
+
+function getPositionEvalSymbol(evalCp) {
+    if (evalCp === null || evalCp === undefined) return '∞';
+
+    const abs = Math.abs(evalCp);
+    const sign = evalCp >= 0 ? 'w' : 'b';
+
+    if (abs <= 25) return '=';
+    if (abs <= 50) return sign === 'w' ? '⩲' : '⩱';
+    if (abs <= 150) return sign === 'w' ? '±' : '∓';
+    if (abs <= 500) return sign === 'w' ? '+-' : '-+';
+    return sign === 'w' ? '+−' : '−+';
+}
+
+function generateCompleteAnalysis(moveReview) {
+    const positionInfo = parseFenPosition(moveReview.fen);
+    const pvAnalysis = analyzePvThreats(moveReview.fen, moveReview.bestMovePv || []);
+    const hieroglyphics = generateHieroglyphics(moveReview, positionInfo, pvAnalysis);
+
+    const llmContext = {
+        position: moveReview.fen,
+        played: moveReview.playerMoveSan,
+        best: moveReview.bestMoveSan || moveReview.bestMove,
+        bestLine: moveReview.bestMovePv,
+        evalSwing: moveReview.swing,
+        materialBalance: positionInfo.material.balance,
+        whiteKingSafe: !positionInfo.kingSafety.white.exposed,
+        blackKingSafe: !positionInfo.kingSafety.black.exposed,
+        passedPawns: positionInfo.passedPawns,
+        threats: pvAnalysis.threats,
+        themes: pvAnalysis.themes,
+        symbols: hieroglyphics
+    };
+
+    return {
+        moveReview,
+        positionInfo,
+        pvAnalysis,
+        hieroglyphics,
+        llmContext
+    };
+}
+
+function generateLlmPrompt(analysis) {
+    const { moveReview, hieroglyphics, llmContext } = analysis;
+
+    return `Analitza aquest error d'escacs i genera una màxima didàctica:
+
+POSICIÓ (FEN): ${moveReview.fen}
+JUGAT: ${moveReview.playerMoveSan} ${hieroglyphics.moveSymbol}
+MILLOR: ${llmContext.best}
+LÍNIA CORRECTA: ${llmContext.bestLine?.join(' ') || 'N/A'}
+PÈRDUA: ${moveReview.swing} centipawns
+
+CONTEXT POSICIONAL:
+- Balanç material: ${llmContext.materialBalance > 0 ? '+' : ''}${llmContext.materialBalance}
+- Rei blanc segur: ${llmContext.whiteKingSafe ? 'Sí' : 'No'}
+- Rei negre segur: ${llmContext.blackKingSafe ? 'Sí' : 'No'}
+- Peons passats blancs: ${llmContext.passedPawns.white.join(', ') || 'Cap'}
+- Peons passats negres: ${llmContext.passedPawns.black.join(', ') || 'Cap'}
+
+TEMES DETECTATS: ${llmContext.themes.join(', ') || 'Cap'}
+AMENACES: ${llmContext.threats.map((t) => t.description || t.type).join('; ') || 'Cap'}
+
+SÍMBOLS: ${hieroglyphics.moveSymbol} ${hieroglyphics.positionSymbol} ${hieroglyphics.themeSymbols.join(' ')}
+
+Genera:
+1. Una màxima d'escacs (1 frase memorable)
+2. Explicació breu de per què la jugada és un error
+3. Explicació de per què la línia correcta és millor`;
 }
 
 function registerMoveReview(swing, analysisData = {}) {
