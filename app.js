@@ -3,6 +3,7 @@
 
 const APP_VERSION = window.APP_VERSION || 'dev';
 const STOCKFISH_URL = `stockfish.js?v=${APP_VERSION}`;
+const DEBUG_ENRICHED_ANALYSIS = false;
 
 let game = null;
 let board = null;
@@ -5173,6 +5174,14 @@ function analyzeMove() {
     pendingAnalysisFen = lastPosition;
 
     // CANVI: Demanar 3 variants per capturar alternatives
+    if (DEBUG_ENRICHED_ANALYSIS) {
+        console.log('[EnrichedAnalysis] start', {
+            waitingForBlunderAnalysis,
+            analysisStep,
+            fen: lastPosition
+        });
+        console.log('[EnrichedAnalysis] setoption MultiPV value 3');
+    }
     try { stockfish.postMessage('setoption name MultiPV value 3'); } catch (e) {}
     stockfish.postMessage(`position fen ${lastPosition}`);
     stockfish.postMessage('go depth 12');
@@ -5248,7 +5257,9 @@ function resetEnrichedAnalysisBuffer() {
     pendingAlternatives = [];
 }
 
-function handleEngineMessage(msg) {
+function handleEngineMessage(rawMsg) {
+    if (typeof rawMsg !== 'string') return;
+    const msg = rawMsg.trim();
     if (msg === 'uciok') {
         try { stockfish.postMessage('isready'); } catch (e) {}
         return;
@@ -5290,6 +5301,7 @@ function handleEngineMessage(msg) {
     
     // NOU: Capturar línies "info" per anàlisi enriquida
     if (waitingForBlunderAnalysis && msg.startsWith('info') && msg.indexOf(' pv ') !== -1) {
+        if (DEBUG_ENRICHED_ANALYSIS) console.log('[EnrichedAnalysis] info', msg);
         const parsedInfo = parseUciInfo(msg);
         if (parsedInfo) {
             accumulateAnalysisInfo(parsedInfo);
