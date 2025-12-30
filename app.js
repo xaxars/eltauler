@@ -567,7 +567,8 @@ function resizeBoardToViewport() {
     const precisionEl = gameScreen.querySelector('.precision-panel');
     const controlsEl = gameScreen.querySelector('.controls');
 
-    const used = (headerEl ? headerEl.getBoundingClientRect().height : 0)
+    const isDesktopLayout = deviceType === 'desktop';
+    const used = isDesktopLayout ? 0 : (headerEl ? headerEl.getBoundingClientRect().height : 0)
         + (precisionEl ? precisionEl.getBoundingClientRect().height : 0)
         + (controlsEl ? controlsEl.getBoundingClientRect().height : 0);
 
@@ -1110,8 +1111,14 @@ function renderLeague() {
         }
 
         const displayElo = (isCalibrationActive() && p.id === 'me') ? '—' : p.elo;
-        tr.append(`<td class="num">${displayElo}</td>`);
-        tr.append(`<td class="num">${p.elo}</td>`);
+        tr.append(`
+            <td class="league-player-cell">
+                <span class="league-player-meta">
+                    <span class="league-player-name">${p.name}</span>
+                    <span class="league-player-elo">${displayElo}</span>
+                </span>
+            </td>
+        `);
         tr.append(`<td class="num">${p.pj}</td>`);
         tr.append(`<td class="num">${p.pg}</td>`);
         tr.append(`<td class="num">${p.pp}</td>`);

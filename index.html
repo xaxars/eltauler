@@ -618,11 +618,9 @@
         .precision-label { font-size: 0.65rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 3px; }
         .precision-value { font-family: 'Cinzel', serif; font-size: 1.3rem; font-weight: 700; color: var(--accent-gold); }
         .precision-target-text { color: var(--text-secondary); }
-        .precision-panel.ai-precision-panel .precision-value { color: var(--accent-purple); }
         
         .precision-bar-container { flex: 1; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; position: relative; overflow: hidden; }
         .precision-bar { height: 100%; background: var(--accent-green); border-radius: 10px; width: 0%; transition: width 0.3s, background 0.3s; }
-        .precision-panel.ai-precision-panel .precision-bar { background: var(--accent-purple); }
         .precision-bar.warning { background: var(--severity-med); }
         .precision-bar.danger { background: var(--severity-high); }
         .calibration-progress {
@@ -1139,6 +1137,24 @@
             border-bottom: 1px solid rgba(201, 162, 39, 0.08);
             font-size: 0.95rem;
         }
+        .league-table tbody td.league-player-cell {
+            text-align: left;
+            font-variant-numeric: tabular-nums;
+        }
+        .league-player-meta {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        .league-player-elo {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+        }
+        .league-player-elo::before {
+            content: '·';
+            margin-right: 6px;
+            color: var(--text-secondary);
+        }
         body.epaper-mode .league-table thead th {
             background: #e6e6e6;
             border-bottom: 1px solid #cfcfcf;
@@ -1146,13 +1162,13 @@
         body.epaper-mode .league-table tbody td { border-bottom: 1px solid #cfcfcf; }      
         .league-table tbody tr:last-child td { border-bottom: none; }
         .league-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
-        .league-row-me td:first-child { color: var(--accent-gold); font-weight: 700; }
+        .league-row-me .league-player-name { color: var(--accent-gold); font-weight: 700; }
         .league-podium-1 { background: rgba(255, 215, 0, 0.14); }
         .league-podium-2 { background: rgba(192, 192, 192, 0.10); }
         .league-podium-3 { background: rgba(205, 127, 50, 0.10); }
 
         /* Lliga responsive mobile */
-        table.league-table { min-width: 520px; }
+        table.league-table { min-width: 480px; }
         .league-table thead th:last-child {
             position: sticky;
             right: 0;
@@ -1206,6 +1222,30 @@
             body.device-mobile .controls { padding: 8px 10px; margin-top: 6px; }
             body.device-mobile .board-container { margin: 0; }
             body.device-mobile #myBoard { width: 100vw; max-width: 100vw; }
+        }
+
+        body.device-desktop #game-screen {
+            display: grid;
+            grid-template-columns: minmax(520px, 1fr) 320px;
+            gap: 16px;
+            align-items: start;
+        }
+        body.device-desktop .header {
+            grid-column: 2;
+            grid-row: 1;
+        }
+        body.device-desktop .precision-panel {
+            grid-column: 2;
+            grid-row: 2;
+        }
+        body.device-desktop .board-container {
+            grid-column: 1;
+            grid-row: 1 / span 3;
+            margin-bottom: 0;
+        }
+        body.device-desktop .controls {
+            grid-column: 2;
+            grid-row: 3;
         }
 
         /* Controls del tauler (tocar / arrossegar) */
@@ -1644,7 +1684,6 @@
                     <thead>
                         <tr>
                             <th>Jugador</th>
-                            <th>ELO</th>
                             <th>PJ</th>
                             <th>PG</th>
                             <th>PP</th>
@@ -1695,20 +1734,6 @@
                 </div>
             </div>
    
-            <div class="precision-panel ai-precision-panel">
-                <div class="precision-stat">
-                    <div class="precision-label">Precisió IA</div>
-                    <div class="precision-value" id="current-ai-precision">—</div>
-                </div>
-                <div class="precision-bar-container">
-                    <div class="precision-bar" id="ai-precision-bar"></div>
-                </div>
-                <div class="precision-stat">
-                    <div class="precision-label">Objectiu</div>
-                    <div class="precision-value precision-target-text" id="ai-precision-target">—</div>
-                </div>
-            </div>
-            
             <div class="board-container">
                 <div id="myBoard"></div>
                 <div class="bundle-success-overlay" id="bundle-success-overlay">
