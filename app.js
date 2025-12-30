@@ -864,8 +864,11 @@ let sessionStats = {
 let isAnalyzingHint = false;
 let waitingForBlunderAnalysis = false;
 let analysisStep = 0;
-let analysisScoreStep1 = 0;
 let tempAnalysisScore = 0;
+let pendingBestMove = null;
+let pendingEvalBefore = null;
+let pendingEvalAfter = null;
+let pendingAnalysisFen = null;
 
 let eloHistory = [];
 let totalGamesPlayed = 0;
@@ -2293,13 +2296,24 @@ function classifyMoveQuality(swing) {
     return 'blunder';
 }
 
-function registerMoveReview(swing) {
+function registerMoveReview(swing, analysisData = {}) {
     if (blunderMode || currentGameMode === 'drill') return;
     const quality = classifyMoveQuality(Math.abs(swing));
+    const history = game.history({ verbose: true });
+    const lastMove = history[history.length - 1];
     currentReview.push({
-        move: lastHumanMoveUci || '—',
+        fen: analysisData.fen || lastPosition || null,
+        moveNumber: Math.ceil(history.length / 2),
+        playerMove: lastHumanMoveUci || '—',
+        playerMoveSan: lastMove ? lastMove.san : '—',
+        bestMove: analysisData.bestMove || null,
+        evalBefore: analysisData.evalBefore ?? null,
+        evalAfter: analysisData.evalAfter ?? null,
         swing: Math.abs(swing),
-        quality: quality
+        quality: quality,
+        isCapture: lastMove ? !!lastMove.captured : false,
+        isCheck: game.in_check(),
+        timestamp: Date.now()
     });
 }
 
@@ -3572,7 +3586,12 @@ function renderGameHistory() {
 function showHistoryReview(entry) {
     if (!entry) return;
     currentGameErrors = Array.isArray(entry.errors)
-        ? entry.errors.map(err => ({ fen: err.fen, severity: err.severity }))
+        ? entry.errors.map(err => ({
+            fen: err.fen,
+            severity: err.severity,
+            bestMove: err.bestMove || null,
+            playerMove: err.playerMove || null
+        }))
         : [];
     const msg = entry.result || 'Partida';
     const precision = typeof entry.precision === 'number' ? entry.precision : 0;
@@ -3593,13 +3612,31 @@ function recordGameHistory(resultLabel, finalPrecision, counts) {
         precision: finalPrecision,
         counts: counts,
         moves: moves,
-        errors: currentGameErrors.map(err => ({ fen: err.fen, severity: err.severity })),
+        errors: currentGameErrors.map(err => ({
+            fen: err.fen,
+            severity: err.severity,
+            bestMove: err.bestMove || null,
+            playerMove: err.playerMove || null
+        })),
+        review: currentReview.slice(),
         playerColor: playerColor,
         opponent: currentOpponent || null,
         pgn: game.pgn()
     };
     gameHistory.push(entry);
     if (gameHistory.length > 60) gameHistory = gameHistory.slice(-60);
+    const reviewEntries = gameHistory.filter(item => Array.isArray(item.review) && item.review.length);
+    if (reviewEntries.length > 30) {
+        const overflow = reviewEntries.length - 30;
+        let cleared = 0;
+        for (const item of gameHistory) {
+            if (cleared >= overflow) break;
+            if (Array.isArray(item.review) && item.review.length) {
+                item.review = [];
+                cleared++;
+            }
+        }
+    }
 }
 
 function checkShareSupport() {
@@ -4440,6 +4477,10 @@ function analyzeMove() {
     waitingForBlunderAnalysis = true;
     analysisStep = 1;
     tempAnalysisScore = 0;
+    pendingBestMove = null;
+    pendingEvalBefore = null;
+    pendingEvalAfter = null;
+    pendingAnalysisFen = lastPosition;
 
     stockfish.postMessage(`position fen ${lastPosition}`);
     stockfish.postMessage('go depth 10');
@@ -4539,13 +4580,16 @@ function handleEngineMessage(msg) {
 
     if (msg.indexOf('bestmove') !== -1 && waitingForBlunderAnalysis) {
         if (analysisStep === 1) {
-            analysisScoreStep1 = tempAnalysisScore;
+            const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
+            pendingBestMove = bestMatch ? bestMatch[1] : null;
+            pendingEvalBefore = tempAnalysisScore;
             analysisStep = 2;
             stockfish.postMessage(`position fen ${game.fen()}`);
             stockfish.postMessage('go depth 10');
         }
         else if (analysisStep === 2) {
-            let swing = tempAnalysisScore + analysisScoreStep1;
+            pendingEvalAfter = tempAnalysisScore;
+            let swing = pendingEvalAfter + (pendingEvalBefore || 0);
             if (!isCalibrationGame && !blunderMode && currentGameMode === 'free') {
                 const delta = swing;
                 const isError = delta > TH_ERR;
@@ -4557,7 +4601,12 @@ function handleEngineMessage(msg) {
                 saveStorage();
             }           
             waitingForBlunderAnalysis = false;
-            registerMoveReview(swing);
+            registerMoveReview(swing, {
+                fen: pendingAnalysisFen,
+                bestMove: pendingBestMove,
+                evalBefore: pendingEvalBefore,
+                evalAfter: pendingEvalAfter
+            });
             
             if (swing > 250 && !blunderMode && currentGameMode !== 'drill') {
                 let severity = 'low';
@@ -4568,7 +4617,12 @@ function handleEngineMessage(msg) {
                     .addClass('alert-' + severity).show();
 
                  if (pendingMoveEvaluation) { pendingMoveEvaluation = false; updatePrecisionDisplay(); }
-                saveBlunderToBundle(lastPosition, severity);
+                saveBlunderToBundle(
+                    pendingAnalysisFen || lastPosition,
+                    severity,
+                    pendingBestMove,
+                    lastHumanMoveUci
+                );
 
                 engineMoveTimeout = setTimeout(() => {
                     if (!game.game_over()) makeEngineMove();
@@ -4578,6 +4632,10 @@ function handleEngineMessage(msg) {
                 if (blunderMode) handleBundleSuccess();
                 else if (!game.game_over()) makeEngineMove();
             }
+            pendingBestMove = null;
+            pendingEvalBefore = null;
+            pendingEvalAfter = null;
+            pendingAnalysisFen = null;
         }
         return;
     }
@@ -4963,10 +5021,17 @@ function registerEngineMovePrecision(moveStr, candidates) {
     updateAIPrecisionDisplay();
 }
 
-function saveBlunderToBundle(fen, severity) {
+function saveBlunderToBundle(fen, severity, bestMove, playerMove) {
      if (!blunderMode && currentGameMode !== 'drill') {
         const alreadyTracked = currentGameErrors.some(e => e.fen === fen);
-        if (!alreadyTracked) currentGameErrors.push({ fen, severity });
+        if (!alreadyTracked) {
+            currentGameErrors.push({
+                fen,
+                severity,
+                bestMove: bestMove || null,
+                playerMove: playerMove || lastHumanMoveUci || null
+            });
+        }
     }
     if (!savedErrors.some(e => e.fen === fen)) {
         let typeErrors = savedErrors.filter(e => e.severity === severity);
@@ -4979,7 +5044,14 @@ function saveBlunderToBundle(fen, severity) {
             savedErrors = savedErrors.filter(e => e !== furthestError);
         }
         
-        savedErrors.push({ fen: fen, date: new Date().toLocaleDateString(), severity: severity, elo: userELO });
+        savedErrors.push({
+            fen: fen,
+            date: new Date().toLocaleDateString(),
+            severity: severity,
+            elo: userELO,
+            bestMove: bestMove || null,
+            playerMove: playerMove || lastHumanMoveUci || null
+        });
         saveStorage(); 
         updateDisplay(); 
     }
