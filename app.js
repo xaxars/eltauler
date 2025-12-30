@@ -2734,14 +2734,28 @@ function initHistoryBoard() {
     });
 }
 
+function getHistoryMoves(entry) {
+    if (!entry) return [];
+    const baseMoves = Array.isArray(entry.moves) ? entry.moves : [];
+    if ((!baseMoves.length || baseMoves.length === 1) && entry.pgn) {
+        const pgnGame = new Chess();
+        if (pgnGame.load_pgn(entry.pgn, { sloppy: true })) {
+            const parsedMoves = pgnGame.history();
+            if (parsedMoves.length) return parsedMoves;
+        }
+    }
+    return baseMoves;
+}
+
 function loadHistoryEntry(entry) {
     if (!entry) return;
     stopHistoryPlayback();
     initHistoryBoard();
+    const moves = getHistoryMoves(entry);
     historyReplay = {
         entry: entry,
         game: new Chess(),
-        moves: entry.moves || [],
+        moves: moves,
         moveIndex: 0,
         timer: null,
         isPlaying: false
@@ -2767,7 +2781,7 @@ function updateHistoryDetails(entry) {
 
     resultEl.text(entry.result || '—');
     precisionEl.text(typeof entry.precision === 'number' ? `${entry.precision}%` : '—');
-    const movesLabel = entry.moves ? `${entry.moves.length} jugades` : '0 jugades';
+    const movesLabel = `${getHistoryMoves(entry).length} jugades`;
     const meta = `${entry.label || '—'} · ${formatHistoryMode(entry.mode)} · ${movesLabel}`;
     metaEl.text(meta);
 
@@ -3522,7 +3536,7 @@ function renderGameHistory() {
         .slice()
         .reverse()
         .map(entry => {
-            const movesCount = entry.moves ? entry.moves.length : 0;
+            const movesCount = getHistoryMoves(entry).length;
             const meta = `${entry.label || '—'} · ${formatHistoryMode(entry.mode)} · ${movesCount} jugades`;
             return `
                 <div class="history-item" data-history-id="${entry.id}">
