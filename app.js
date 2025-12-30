@@ -210,9 +210,9 @@ function isTouchDevice() {
 const CONTROL_MODE_KEY = 'eltauler_control_mode';
 let controlMode = null;
 
-// Revisió d'errors (Bundle): validar només les 2 millors jugades o acceptar qualsevol jugada legal
+// Revisió d'errors (Bundle): validar només la millor jugada o les 2 millors
 const BUNDLE_ACCEPT_MODE_KEY = 'eltauler_bundle_accept_mode';
-let bundleAcceptMode = 'top2'; // 'top2' o 'any'
+let bundleAcceptMode = 'top1'; // 'top1' o 'top2'
 
 const EPAPER_MODE_KEY = 'eltauler_epaper_mode';
 let epaperEnabled = false;
@@ -229,13 +229,14 @@ let backupDirHandle = null;
 function loadBundleAcceptMode() {
     try {
         const v = localStorage.getItem(BUNDLE_ACCEPT_MODE_KEY);
-        if (v === 'top2' || v === 'any') return v;
+        if (v === 'top1' || v === 'top2') return v;
+        if (v === 'any') return 'top1';
     } catch (e) {}
-    return 'top2';
+    return 'top1';
 }
 
 function saveBundleAcceptMode(mode) {
-    bundleAcceptMode = (mode === 'any') ? 'any' : 'top2';
+    bundleAcceptMode = (mode === 'top2') ? 'top2' : 'top1';
     try { localStorage.setItem(BUNDLE_ACCEPT_MODE_KEY, bundleAcceptMode); } catch (e) {}
     const sel = document.getElementById('bundle-accept-select');
     if (sel) sel.value = bundleAcceptMode;
@@ -489,8 +490,9 @@ function applyTvJeroglyphicsMode(enabled, options = {}) {
     updateTvControls();
 }
 
-// Estat de validació Top-2 al Bundle
-let isBundleTop2Analysis = false;
+// Estat de validació estricta al Bundle
+let isBundleStrictAnalysis = false;
+let bundleBestMove = null;
 let bundlePvMoves = {};
 let lastHumanMoveUci = null;
 
@@ -1152,12 +1154,10 @@ function renderLeague() {
         const displayElo = (isCalibrationActive() && p.id === 'me') ? '—' : p.elo;
         tr.append(`
             <td class="league-player-cell">
-                <span class="league-player-meta">
-                    <span class="league-player-name">${p.name}</span>
-                    <span class="league-player-elo">${displayElo}</span>
-                </span>
+                <span class="league-player-name">${p.name}</span>
             </td>
         `);
+        tr.append(`<td class="league-elo-cell num">${displayElo}</td>`);
         tr.append(`<td class="num">${p.pj}</td>`);
         tr.append(`<td class="num">${p.pg}</td>`);
         tr.append(`<td class="num">${p.pp}</td>`);
@@ -2181,6 +2181,10 @@ function updateAdaptiveEngineEloLabel() {
     }
     if (isCalibrationActive()) {
         $('#engine-elo').text('Calibratge');
+        return;
+    }
+    if (currentGameMode === 'free' && !blunderMode) {
+        $('#engine-elo').text('Adaptativa');
         return;
     }
     $('#engine-elo').text(`Adaptativa · ELO ${Math.round(currentElo)}`);
@@ -3397,11 +3401,11 @@ function startTvJeroglyphics(resumePlayback) {
     tvJeroglyphicsIncorrect = false;
     clearTvHintHighlight();
     stopTvPlayback();
-    setTvStatus('Jeroglífic: buscant les dues millors jugades...');
+    setTvStatus('Jeroglífic: buscant la millor jugada...');
     updateTvControls();
     updateTvJeroglyphicsUI();
     
-    try { stockfish.postMessage('setoption name MultiPV value 2'); } catch (e) {}
+    try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
     stockfish.postMessage(`position fen ${tvReplay.game.fen()}`);
     stockfish.postMessage('go depth 12');
 }
@@ -3444,7 +3448,7 @@ function cancelTvJeroglyphics(message) {
 function requestTvJeroglyphicsHint() {
     if (!tvJeroglyphicsActive || tvJeroglyphicsSolved || tvJeroglyphicsIncorrect || !tvReplay || !tvReplay.game) return;
     if (tvJeroglyphicsAnalyzing) {
-        setTvStatus('Esperant les millors jugades...');
+        setTvStatus('Esperant la millor jugada...');
         return;
     }
     if (tvJeroglyphicsTopMoves.length > 0) {
@@ -3634,6 +3638,19 @@ function setupEvents() {
     $('#btn-league-play').click(() => { if (guardCalibrationAccess()) startLeagueRound(); });
 
     $('#btn-drills').click(() => { if (guardCalibrationAccess()) showDrillsMenu(); });
+
+    $('#btn-reset-league').click(() => {
+        if (!guardCalibrationAccess()) return;
+        if (!isLeagueUnlocked()) {
+            alert(`La lliga s'activa després de ${LEAGUE_UNLOCK_MIN_GAMES} partides un cop calibrat.`);
+            return;
+        }
+        const ok = confirm("Vols reiniciar la lliga actual? Se'n crearà una de nova segons el teu ELO actual.");
+        if (!ok) return;
+        createNewLeague(true);
+        updateLeagueBanner();
+        alert('Lliga reiniciada.');
+    });
 
     $('#btn-back-stats').click(() => {
         stopHistoryPlayback();
@@ -4207,7 +4224,8 @@ function startGame(isBundle, fen = null) {
     isCalibrationGame = isCalibrationActive() && !isBundle && currentGameMode !== 'drill';
     currentBundleFen = fen;
     lastHumanMoveUci = null;
-    isBundleTop2Analysis = false;
+    isBundleStrictAnalysis = false;
+    bundleBestMove = null;
     bundlePvMoves = {};
     if (isBundle) { bundleAcceptMode = loadBundleAcceptMode(); }
 
@@ -4384,10 +4402,12 @@ function chooseFallbackMove(fallbackMove) {
 function analyzeMove() {
     if (!stockfish && !ensureStockfish()) { setTimeout(makeEngineMove, 300); return; }
 
-    if (blunderMode && currentBundleFen && bundleAcceptMode === 'top2') {
-        isBundleTop2Analysis = true;
+    if (blunderMode && currentBundleFen && (bundleAcceptMode === 'top1' || bundleAcceptMode === 'top2')) {
+        isBundleStrictAnalysis = true;
         bundlePvMoves = {};
-        stockfish.postMessage('setoption name MultiPV value 2');
+        bundleBestMove = null;
+        const multiPvValue = bundleAcceptMode === 'top2' ? 2 : 1;
+        stockfish.postMessage(`setoption name MultiPV value ${multiPvValue}`);
         stockfish.postMessage(`position fen ${lastPosition}`);
         stockfish.postMessage('go depth 12');
         return;
@@ -4416,21 +4436,12 @@ function handleEngineMessage(msg) {
     }
 
     if (tvJeroglyphicsAnalyzing) {
-        const pvMatch = msg.match(/multipv\s+([12]).*?\spv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if (pvMatch) {
-            tvJeroglyphicsPvMoves[pvMatch[1]] = pvMatch[2];
-        }
         if (msg.indexOf('bestmove') !== -1) {
             tvJeroglyphicsAnalyzing = false;
             try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
             const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
-            const candidates = [
-                tvJeroglyphicsPvMoves['1'],
-                tvJeroglyphicsPvMoves['2'],
-                bestMatch ? bestMatch[1] : null
-            ].filter(Boolean);
-            tvJeroglyphicsTopMoves = Array.from(new Set(candidates)).slice(0, 2);
-            setTvStatus('Jeroglífic: endevina una de les dues millors jugades.');
+            tvJeroglyphicsTopMoves = bestMatch ? [bestMatch[1]] : [];
+            setTvStatus('Jeroglífic: endevina la millor jugada.');
             updateTvControls();
             updateTvJeroglyphicsUI();        
         }
@@ -4462,16 +4473,39 @@ function handleEngineMessage(msg) {
 
     trackEngineCandidate(msg);
     
-    // Validació Top-2 en mode Bundle
-    if (isBundleTop2Analysis) {
-        const pvMatch = msg.match(/multipv\s+([12]).*?\spv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if (pvMatch) {
-            bundlePvMoves[pvMatch[1]] = pvMatch[2];
+    // Validació estricta en mode Bundle
+    if (isBundleStrictAnalysis) {
+        if (bundleAcceptMode === 'top2') {
+            const pvMatch = msg.match(/multipv\s+([12]).*?\spv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+            if (pvMatch) {
+                bundlePvMoves[pvMatch[1]] = pvMatch[2];
+            }
         }
 
         if (msg.indexOf('bestmove') !== -1) {
-            isBundleTop2Analysis = false;
+            isBundleStrictAnalysis = false;
             try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+
+            if (bundleAcceptMode === 'top1') {
+                const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
+                bundleBestMove = bestMatch ? bestMatch[1] : null;
+                const played = lastHumanMoveUci || '';
+                const playedBase = played.slice(0, 4);
+                const bestBase = bundleBestMove ? bundleBestMove.slice(0, 4) : '';
+                const ok = bundleBestMove ? (played === bundleBestMove || playedBase === bestBase) : false;
+                if (ok) {
+                    if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+                    handleBundleSuccess();
+                } else {
+                    if (pendingMoveEvaluation) {
+                        pendingMoveEvaluation = false;
+                        totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
+                        updatePrecisionDisplay();
+                    }
+                    showBundleTryAgainModal();
+                }
+                return;
+            }
 
             const accepted = [bundlePvMoves['1'], bundlePvMoves['2']].filter(Boolean);
             const played = lastHumanMoveUci || '';
@@ -4597,10 +4631,13 @@ function resetBundleToStartPosition() {
 
 function showBundleTryAgainModal() {
     $('#bundle-retry-modal').remove();
+    const reasonText = bundleAcceptMode === 'top2'
+        ? 'Aquesta no és una de les dues millors opcions. Prova una altra jugada.'
+        : 'Aquesta no és la millor opció. Prova una altra jugada.';
     let html = '<div class="modal-overlay" id="bundle-retry-modal" style="display:flex;">';
     html += '<div class="modal-content">';
     html += '<div class="modal-title">Tornar a intentar</div>';
-    html += '<div style="margin:12px 0; color:var(--text-secondary); line-height:1.4;">Aquesta no és una de les dues millors opcions. Prova una altra jugada.</div>';
+    html += `<div style="margin:12px 0; color:var(--text-secondary); line-height:1.4;">${reasonText}</div>`;
     html += '<button class="btn btn-primary" id="btn-bundle-retry-ok">OK</button>';
     html += '</div></div>';
     $('body').append(html);

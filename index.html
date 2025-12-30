@@ -117,7 +117,7 @@
         body.device-mobile .controls { padding: 10px; margin-top: 8px; }
         body.device-mobile .status-message { font-size: 0.9rem; margin-bottom: 10px; }
         body.device-mobile .game-buttons .btn { padding: 12px 8px; font-size: 0.82rem; }
-        body.device-mobile table.league-table { min-width: 470px; }
+        body.device-mobile table.league-table { min-width: 520px; }
         body.device-mobile .league-table thead th, body.device-mobile .league-table tbody td { padding: 8px 6px; }
         body.device-mobile .league-table thead th { font-size: 0.74rem; }
         body.device-mobile .league-table tbody td { font-size: 0.86rem; }
@@ -1139,21 +1139,12 @@
         }
         .league-table tbody td.league-player-cell {
             text-align: left;
+        }
+        .league-elo-cell {
+            text-align: right;
             font-variant-numeric: tabular-nums;
-        }
-        .league-player-meta {
-            display: inline-flex;
-            align-items: baseline;
-            gap: 6px;
-        }
-        .league-player-elo {
             color: var(--text-secondary);
             font-size: 0.88rem;
-        }
-        .league-player-elo::before {
-            content: '·';
-            margin-right: 6px;
-            color: var(--text-secondary);
         }
         body.epaper-mode .league-table thead th {
             background: #e6e6e6;
@@ -1162,13 +1153,14 @@
         body.epaper-mode .league-table tbody td { border-bottom: 1px solid #cfcfcf; }      
         .league-table tbody tr:last-child td { border-bottom: none; }
         .league-table tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .league-table thead th.num { text-align: right; }
         .league-row-me .league-player-name { color: var(--accent-gold); font-weight: 700; }
         .league-podium-1 { background: rgba(255, 215, 0, 0.14); }
         .league-podium-2 { background: rgba(192, 192, 192, 0.10); }
         .league-podium-3 { background: rgba(205, 127, 50, 0.10); }
 
         /* Lliga responsive mobile */
-        table.league-table { min-width: 480px; }
+        table.league-table { min-width: 520px; }
         .league-table thead th:last-child {
             position: sticky;
             right: 0;
@@ -1206,7 +1198,7 @@
             .controls { padding: 10px; margin-top: 8px; }
             .status-message { font-size: 0.9rem; margin-bottom: 10px; }
             .game-buttons .btn { padding: 12px 8px; font-size: 0.82rem; }
-            table.league-table { min-width: 470px; }
+            table.league-table { min-width: 520px; }
             .league-table thead th, .league-table tbody td { padding: 8px 6px; }
             .league-table thead th { font-size: 0.74rem; }
             .league-table tbody td { font-size: 0.86rem; }
@@ -1429,6 +1421,11 @@
             <div class="settings-panel">
                 <div class="settings-title">Configuració</div>
                 <div class="setting-row">
+                    <div class="setting-label">Lliga</div>
+                    <button class="btn btn-secondary" id="btn-reset-league">Reiniciar lliga</button>
+                </div>
+                <div class="setting-help">Genera una nova lliga segons el teu ELO actual.</div>
+                <div class="setting-row">
                     <div class="setting-label">Control del tauler</div>
                     <select id="control-mode-select" class="select-control">
                         <option value="tap">Tocar</option>
@@ -1439,8 +1436,8 @@
                 <div class="setting-row">
                     <div class="setting-label">Revisió d'errors (Bundle)</div>
                     <select id="bundle-accept-select" class="select-control">
-                        <option value="top2">Només les 2 millors</option>
-                        <option value="any">Qualsevol jugada legal</option>
+                        <option value="top1">Només la millor</option>
+                        <option value="top2">Només les dues millors</option>
                     </select>
                 </div>
                 <div class="setting-row">
@@ -1684,6 +1681,7 @@
                     <thead>
                         <tr>
                             <th>Jugador</th>
+                            <th class="num">ELO</th>
                             <th>PJ</th>
                             <th>PG</th>
                             <th>PP</th>
