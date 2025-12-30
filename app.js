@@ -5252,9 +5252,6 @@ function extractEnrichedAnalysis() {
  */
 function resetEnrichedAnalysisBuffer() {
     enrichedAnalysisBuffer = {};
-    pendingAnalysisDepth = null;
-    pendingBestMovePv = [];
-    pendingAlternatives = [];
 }
 
 function handleEngineMessage(rawMsg) {
