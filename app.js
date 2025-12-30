@@ -5179,60 +5179,6 @@ function analyzeMove() {
 }
 
 /**
- * Parseja una línia "info" de Stockfish UCI i n'extreu les dades.
- * @param {string} line - Línia UCI (ex: "info depth 20 multipv 1 score cp -82 pv d4d3 d5d4")
- * @returns {object|null} - Objecte amb les dades o null si no és vàlid
- */
-function parseUciInfo(line) {
-    if (!line || !line.startsWith('info') || line.indexOf(' pv ') === -1) {
-        return null;
-    }
-
-    const result = {
-        depth: null,
-        multipv: 1,
-        score: null,
-        scoreType: 'cp',
-        pv: [],
-        nodes: null,
-        time: null
-    };
-
-    // Extreure depth
-    const depthMatch = line.match(/\bdepth\s+(\d+)/);
-    if (depthMatch) result.depth = parseInt(depthMatch[1]);
-
-    // Extreure multipv
-    const multipvMatch = line.match(/\bmultipv\s+(\d+)/);
-    if (multipvMatch) result.multipv = parseInt(multipvMatch[1]);
-
-    // Extreure score (cp o mate)
-    const cpMatch = line.match(/\bscore\s+cp\s+(-?\d+)/);
-    const mateMatch = line.match(/\bscore\s+mate\s+(-?\d+)/);
-    if (cpMatch) {
-        result.score = parseInt(cpMatch[1]);
-        result.scoreType = 'cp';
-    } else if (mateMatch) {
-        result.score = parseInt(mateMatch[1]);
-        result.scoreType = 'mate';
-    }
-
-    // Extreure PV (línia principal)
-    const pvMatch = line.match(/\bpv\s+(.+)$/);
-    if (pvMatch) {
-        result.pv = pvMatch[1].trim().split(/\s+/).filter(m => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m));
-    }
-
-    // Extreure nodes i time (opcional)
-    const nodesMatch = line.match(/\bnodes\s+(\d+)/);
-    if (nodesMatch) result.nodes = parseInt(nodesMatch[1]);
-    const timeMatch = line.match(/\btime\s+(\d+)/);
-    if (timeMatch) result.time = parseInt(timeMatch[1]);
-
-    return result;
-}
-
-/**
  * Acumula informació UCI durant l'anàlisi.
  * @param {object} info - Resultat de parseUciInfo
  */
