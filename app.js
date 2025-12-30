@@ -869,6 +869,11 @@ let pendingBestMove = null;
 let pendingEvalBefore = null;
 let pendingEvalAfter = null;
 let pendingAnalysisFen = null;
+// Variables per captura enriquida de Stockfish
+let pendingAnalysisDepth = null;
+let pendingBestMovePv = [];
+let pendingAlternatives = [];
+let enrichedAnalysisBuffer = {};
 
 let eloHistory = [];
 let totalGamesPlayed = 0;
@@ -2962,6 +2967,22 @@ function registerMoveReview(swing, analysisData = {}) {
     const quality = classifyMoveQuality(Math.abs(swing));
     const history = game.history({ verbose: true });
     const lastMove = history[history.length - 1];
+    
+    // Intentar convertir bestMove UCI a SAN
+    let bestMoveSan = null;
+    if (analysisData.bestMove && analysisData.fen) {
+        try {
+            const tempGame = new Chess(analysisData.fen);
+            const uci = analysisData.bestMove;
+            const moveObj = tempGame.move({
+                from: uci.slice(0, 2),
+                to: uci.slice(2, 4),
+                promotion: uci.length > 4 ? uci[4] : undefined
+            });
+            if (moveObj) bestMoveSan = moveObj.san;
+        } catch (e) {}
+    }
+    
     currentReview.push({
         fen: analysisData.fen || lastPosition || null,
         moveNumber: Math.ceil(history.length / 2),
@@ -2974,7 +2995,13 @@ function registerMoveReview(swing, analysisData = {}) {
         quality: quality,
         isCapture: lastMove ? !!lastMove.captured : false,
         isCheck: game.in_check(),
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        
+        // NOUS CAMPS ENRIQUITS
+        depth: analysisData.depth || null,
+        bestMoveSan: bestMoveSan,
+        bestMovePv: analysisData.bestMovePv || [],
+        alternatives: analysisData.alternatives || []
     });
 }
 
@@ -5135,6 +5162,8 @@ function analyzeMove() {
         return;
     }
 
+    // CANVI: Activar MultiPV i resetejar buffer
+    resetEnrichedAnalysisBuffer();
     waitingForBlunderAnalysis = true;
     analysisStep = 1;
     tempAnalysisScore = 0;
@@ -5143,8 +5172,134 @@ function analyzeMove() {
     pendingEvalAfter = null;
     pendingAnalysisFen = lastPosition;
 
+    // CANVI: Demanar 3 variants per capturar alternatives
+    try { stockfish.postMessage('setoption name MultiPV value 3'); } catch (e) {}
     stockfish.postMessage(`position fen ${lastPosition}`);
-    stockfish.postMessage('go depth 10');
+    stockfish.postMessage('go depth 12');
+}
+
+/**
+ * Parseja una línia "info" de Stockfish UCI i n'extreu les dades.
+ * @param {string} line - Línia UCI (ex: "info depth 20 multipv 1 score cp -82 pv d4d3 d5d4")
+ * @returns {object|null} - Objecte amb les dades o null si no és vàlid
+ */
+function parseUciInfo(line) {
+    if (!line || !line.startsWith('info') || line.indexOf(' pv ') === -1) {
+        return null;
+    }
+
+    const result = {
+        depth: null,
+        multipv: 1,
+        score: null,
+        scoreType: 'cp',
+        pv: [],
+        nodes: null,
+        time: null
+    };
+
+    // Extreure depth
+    const depthMatch = line.match(/\bdepth\s+(\d+)/);
+    if (depthMatch) result.depth = parseInt(depthMatch[1]);
+
+    // Extreure multipv
+    const multipvMatch = line.match(/\bmultipv\s+(\d+)/);
+    if (multipvMatch) result.multipv = parseInt(multipvMatch[1]);
+
+    // Extreure score (cp o mate)
+    const cpMatch = line.match(/\bscore\s+cp\s+(-?\d+)/);
+    const mateMatch = line.match(/\bscore\s+mate\s+(-?\d+)/);
+    if (cpMatch) {
+        result.score = parseInt(cpMatch[1]);
+        result.scoreType = 'cp';
+    } else if (mateMatch) {
+        result.score = parseInt(mateMatch[1]);
+        result.scoreType = 'mate';
+    }
+
+    // Extreure PV (línia principal)
+    const pvMatch = line.match(/\bpv\s+(.+)$/);
+    if (pvMatch) {
+        result.pv = pvMatch[1].trim().split(/\s+/).filter(m => /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m));
+    }
+
+    // Extreure nodes i time (opcional)
+    const nodesMatch = line.match(/\bnodes\s+(\d+)/);
+    if (nodesMatch) result.nodes = parseInt(nodesMatch[1]);
+    const timeMatch = line.match(/\btime\s+(\d+)/);
+    if (timeMatch) result.time = parseInt(timeMatch[1]);
+
+    return result;
+}
+
+/**
+ * Acumula informació UCI durant l'anàlisi.
+ * @param {object} info - Resultat de parseUciInfo
+ */
+function accumulateAnalysisInfo(info) {
+    if (!info || info.multipv === undefined) return;
+
+    const key = String(info.multipv);
+    
+    // Només actualitzar si la profunditat és igual o major
+    if (!enrichedAnalysisBuffer[key] || 
+        (info.depth && info.depth >= (enrichedAnalysisBuffer[key].depth || 0))) {
+        enrichedAnalysisBuffer[key] = {
+            depth: info.depth,
+            score: info.score,
+            scoreType: info.scoreType,
+            pv: info.pv,
+            move: info.pv[0] || null
+        };
+    }
+}
+
+/**
+ * Extreu el resultat final de l'anàlisi acumulada.
+ * @returns {object} - { depth, bestMove, bestMovePv, alternatives }
+ */
+function extractEnrichedAnalysis() {
+    const result = {
+        depth: null,
+        bestMove: null,
+        bestMovePv: [],
+        alternatives: []
+    };
+
+    const pv1 = enrichedAnalysisBuffer['1'];
+    if (pv1) {
+        result.depth = pv1.depth;
+        result.bestMove = pv1.move;
+        result.bestMovePv = pv1.pv || [];
+    }
+
+    // Afegir alternatives (multipv 2 i 3)
+    ['2', '3'].forEach(key => {
+        const alt = enrichedAnalysisBuffer[key];
+        if (alt && alt.move) {
+            let evalCp = alt.score;
+            if (alt.scoreType === 'mate') {
+                evalCp = alt.score > 0 ? 10000 : -10000;
+            }
+            result.alternatives.push({
+                move: alt.move,
+                eval: evalCp,
+                pv: alt.pv || []
+            });
+        }
+    });
+
+    return result;
+}
+
+/**
+ * Reseteja el buffer d'anàlisi enriquida.
+ */
+function resetEnrichedAnalysisBuffer() {
+    enrichedAnalysisBuffer = {};
+    pendingAnalysisDepth = null;
+    pendingBestMovePv = [];
+    pendingAlternatives = [];
 }
 
 function handleEngineMessage(msg) {
@@ -5187,6 +5342,22 @@ function handleEngineMessage(msg) {
         return;
     }
     
+    // NOU: Capturar línies "info" per anàlisi enriquida
+    if (waitingForBlunderAnalysis && msg.startsWith('info') && msg.indexOf(' pv ') !== -1) {
+        const parsedInfo = parseUciInfo(msg);
+        if (parsedInfo) {
+            accumulateAnalysisInfo(parsedInfo);
+            // Actualitzar score temporal del multipv 1
+            if (parsedInfo.multipv === 1 && parsedInfo.score !== null) {
+                if (parsedInfo.scoreType === 'mate') {
+                    tempAnalysisScore = parsedInfo.score > 0 ? 10000 : -10000;
+                } else {
+                    tempAnalysisScore = parsedInfo.score;
+                }
+            }
+        }
+    }
+
     if (msg.indexOf('score cp') !== -1) {
         let match = msg.match(/score cp (-?\d+)/);
         if (match) tempAnalysisScore = parseInt(match[1]);
@@ -5241,9 +5412,20 @@ function handleEngineMessage(msg) {
 
     if (msg.indexOf('bestmove') !== -1 && waitingForBlunderAnalysis) {
         if (analysisStep === 1) {
+            // CANVI: Extreure anàlisi enriquida
+            const enriched = extractEnrichedAnalysis();
+            
             const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
-            pendingBestMove = bestMatch ? bestMatch[1] : null;
+            pendingBestMove = enriched.bestMove || (bestMatch ? bestMatch[1] : null);
+            pendingBestMovePv = enriched.bestMovePv || [];
+            pendingAnalysisDepth = enriched.depth || null;
+            pendingAlternatives = enriched.alternatives || [];
             pendingEvalBefore = tempAnalysisScore;
+            
+            // Resetejar buffer i MultiPV per la segona anàlisi
+            resetEnrichedAnalysisBuffer();
+            try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+            
             analysisStep = 2;
             stockfish.postMessage(`position fen ${game.fen()}`);
             stockfish.postMessage('go depth 10');
@@ -5265,6 +5447,9 @@ function handleEngineMessage(msg) {
             registerMoveReview(swing, {
                 fen: pendingAnalysisFen,
                 bestMove: pendingBestMove,
+                bestMovePv: pendingBestMovePv,
+                depth: pendingAnalysisDepth,
+                alternatives: pendingAlternatives,
                 evalBefore: pendingEvalBefore,
                 evalAfter: pendingEvalAfter
             });
@@ -5282,7 +5467,8 @@ function handleEngineMessage(msg) {
                     pendingAnalysisFen || lastPosition,
                     severity,
                     pendingBestMove,
-                    lastHumanMoveUci
+                    lastHumanMoveUci,
+                    pendingBestMovePv
                 );
 
                 engineMoveTimeout = setTimeout(() => {
@@ -5294,6 +5480,9 @@ function handleEngineMessage(msg) {
                 else if (!game.game_over()) makeEngineMove();
             }
             pendingBestMove = null;
+            pendingBestMovePv = [];
+            pendingAnalysisDepth = null;
+            pendingAlternatives = [];
             pendingEvalBefore = null;
             pendingEvalAfter = null;
             pendingAnalysisFen = null;
@@ -5682,7 +5871,7 @@ function registerEngineMovePrecision(moveStr, candidates) {
     updateAIPrecisionDisplay();
 }
 
-function saveBlunderToBundle(fen, severity, bestMove, playerMove) {
+function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = []) {
      if (!blunderMode && currentGameMode !== 'drill') {
         const alreadyTracked = currentGameErrors.some(e => e.fen === fen);
         if (!alreadyTracked) {
@@ -5690,7 +5879,8 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove) {
                 fen,
                 severity,
                 bestMove: bestMove || null,
-                playerMove: playerMove || lastHumanMoveUci || null
+                playerMove: playerMove || lastHumanMoveUci || null,
+                bestMovePv: bestMovePv || []
             });
         }
     }
@@ -5711,7 +5901,8 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove) {
             severity: severity,
             elo: userELO,
             bestMove: bestMove || null,
-            playerMove: playerMove || lastHumanMoveUci || null
+            playerMove: playerMove || lastHumanMoveUci || null,
+            bestMovePv: bestMovePv || []
         });
         saveStorage(); 
         updateDisplay(); 
