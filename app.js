@@ -213,6 +213,7 @@ let controlMode = null;
 // Revisió d'errors (Bundle): validar només la millor jugada o les 2 millors
 const BUNDLE_ACCEPT_MODE_KEY = 'eltauler_bundle_accept_mode';
 let bundleAcceptMode = 'top1'; // 'top1' o 'top2'
+const bundleAnswerCache = new Map();
 
 const EPAPER_MODE_KEY = 'eltauler_epaper_mode';
 let epaperEnabled = false;
@@ -4403,6 +4404,15 @@ function analyzeMove() {
     if (!stockfish && !ensureStockfish()) { setTimeout(makeEngineMove, 300); return; }
 
     if (blunderMode && currentBundleFen && (bundleAcceptMode === 'top1' || bundleAcceptMode === 'top2')) {
+        const cached = bundleAnswerCache.get(currentBundleFen);
+        if (cached && cached.mode === bundleAcceptMode) {
+            const hasTop1 = cached.mode === 'top1' && cached.bestMove;
+            const hasTop2 = cached.mode === 'top2' && cached.pvMoves && (cached.pvMoves['1'] || cached.pvMoves['2']);
+            if (hasTop1 || hasTop2) {
+                evaluateBundleAttempt(cached);
+                return;
+            }
+        }
         isBundleStrictAnalysis = true;
         bundlePvMoves = {};
         bundleBestMove = null;
@@ -4440,7 +4450,9 @@ function handleEngineMessage(msg) {
             tvJeroglyphicsAnalyzing = false;
             try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
             const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
-            tvJeroglyphicsTopMoves = bestMatch ? [bestMatch[1]] : [];
+            if (!tvJeroglyphicsTopMoves.length) {
+                tvJeroglyphicsTopMoves = bestMatch ? [bestMatch[1]] : [];
+            }
             setTvStatus('Jeroglífic: endevina la millor jugada.');
             updateTvControls();
             updateTvJeroglyphicsUI();        
@@ -4489,39 +4501,13 @@ function handleEngineMessage(msg) {
             if (bundleAcceptMode === 'top1') {
                 const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
                 bundleBestMove = bestMatch ? bestMatch[1] : null;
-                const played = lastHumanMoveUci || '';
-                const playedBase = played.slice(0, 4);
-                const bestBase = bundleBestMove ? bundleBestMove.slice(0, 4) : '';
-                const ok = bundleBestMove ? (played === bundleBestMove || playedBase === bestBase) : false;
-                if (ok) {
-                    if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
-                    handleBundleSuccess();
-                } else {
-                    if (pendingMoveEvaluation) {
-                        pendingMoveEvaluation = false;
-                        totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
-                        updatePrecisionDisplay();
-                    }
-                    showBundleTryAgainModal();
-                }
+                cacheBundleAnswer(currentBundleFen, bundleAcceptMode, bundleBestMove, {});
+                evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: bundleBestMove, pvMoves: {} });
                 return;
             }
 
-            const accepted = [bundlePvMoves['1'], bundlePvMoves['2']].filter(Boolean);
-            const played = lastHumanMoveUci || '';
-            const ok = accepted.length > 0 ? accepted.includes(played) : false;
-
-            if (ok) {
-                if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
-                handleBundleSuccess();
-            } else {
-                if (pendingMoveEvaluation) {
-                    pendingMoveEvaluation = false;
-                    totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
-                    updatePrecisionDisplay();
-                }
-                showBundleTryAgainModal();
-            }
+            cacheBundleAnswer(currentBundleFen, bundleAcceptMode, null, { ...bundlePvMoves });
+            evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: null, pvMoves: { ...bundlePvMoves } });
         }
         return;
     }
@@ -4627,6 +4613,36 @@ function resetBundleToStartPosition() {
     clearTapSelection();
     $('#blunder-alert').hide();
     $('#status').text("Tornar a intentar");
+}
+
+function cacheBundleAnswer(fen, mode, bestMove, pvMoves) {
+    if (!fen || !mode) return;
+    bundleAnswerCache.set(fen, { mode, bestMove, pvMoves });
+}
+
+function evaluateBundleAttempt(bundleData) {
+    const played = lastHumanMoveUci || '';
+    const playedBase = played.slice(0, 4);
+    let ok = false;
+    if (bundleData.mode === 'top1') {
+        const bestMove = bundleData.bestMove || '';
+        const bestBase = bestMove.slice(0, 4);
+        ok = bestMove ? (played === bestMove || playedBase === bestBase) : false;
+    } else if (bundleData.mode === 'top2') {
+        const accepted = [bundleData.pvMoves?.['1'], bundleData.pvMoves?.['2']].filter(Boolean);
+        ok = accepted.length > 0 ? accepted.includes(played) : false;
+    }
+    if (ok) {
+        if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+        handleBundleSuccess();
+    } else {
+        if (pendingMoveEvaluation) {
+            pendingMoveEvaluation = false;
+            totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
+            updatePrecisionDisplay();
+        }
+        showBundleTryAgainModal();
+    }
 }
 
 function showBundleTryAgainModal() {
