@@ -1554,7 +1554,9 @@ function getCalibrationEloFloor() {
 
 function clampUserElo(value) {
     const floor = getCalibrationEloFloor();
-    const minValue = Math.max(50, typeof floor === 'number' ? floor : 50);
+    const baseFloor = typeof floor === 'number' ? floor : ELO_MIN;
+    const flexibleFloor = Math.max(ELO_MIN, baseFloor * 0.7);
+    const minValue = Number.isFinite(flexibleFloor) ? flexibleFloor : ELO_MIN;
     return Math.round(Math.max(minValue, Math.min(ELO_MAX, value)));
 }
 
@@ -1622,6 +1624,16 @@ function applyContinuousEloAdjustment(delta, reason, meta = {}) {
     return { delta: appliedDelta, message: message };
 }
 
+function getBaselineAdjustmentDelta(resultLabel, qualityScore) {
+    if (resultLabel === 'win') {
+        return qualityScore >= 0.65 ? 10 : 6;
+    }
+    if (resultLabel === 'loss') {
+        return qualityScore >= 0.6 ? -6 : -12;
+    }
+    return 0;
+}
+
 function registerFreeGameAdjustment(resultScore, precision, metrics = {}) {
     const quality = evaluateGameQuality(precision, metrics.avgCpLoss, metrics.blunders);
     const resultLabel = resultScore === 1 ? 'win' : resultScore === 0 ? 'loss' : 'draw';
@@ -1642,6 +1654,17 @@ function registerFreeGameAdjustment(resultScore, precision, metrics = {}) {
     else freeLossStreak = 0;
 
     let feedback = null;
+    const baselineDelta = getBaselineAdjustmentDelta(resultLabel, quality.qualityScore);
+    if (baselineDelta !== 0) {
+        const baselineAdjustment = applyContinuousEloAdjustment(
+            baselineDelta,
+            'Ajust fi per resultat',
+            { cycle: 'baseline' }
+        );
+        if (baselineAdjustment) {
+            feedback = baselineAdjustment.message;
+        }
+    }
     if (freeLossStreak >= CONTINUOUS_ADJUST_CONFIG.LOSS_STREAK_TRIGGER) {
         const relief = applyContinuousEloAdjustment(
             CONTINUOUS_ADJUST_CONFIG.LOSS_STREAK_DELTA,
@@ -1800,11 +1823,19 @@ function estimateCalibrationElo() {
         const quality = getCalibrationGameQuality(game);
         const performance = (quality * 0.7) + (resultScore * 0.3);
         const weight = 1 + (idx * 0.1);
-        return { performance, weight };
+        return { performance, weight, opponentElo: game.opponentElo || null };
     });
     const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
     const weightedPerformance = weighted.reduce((sum, item) => sum + (item.performance * item.weight), 0) / (totalWeight || 1);
-    const eloEstimate = CALIBRATION_ELO_MIN + (weightedPerformance * (CALIBRATION_ELO_MAX - CALIBRATION_ELO_MIN));
+    const opponentEloValues = weighted
+        .map(item => item.opponentElo)
+        .filter(value => typeof value === 'number' && !isNaN(value));
+    const avgOpponentElo = opponentEloValues.length
+        ? opponentEloValues.reduce((sum, value) => sum + value, 0) / opponentEloValues.length
+        : CALIBRATION_ELOS[Math.min(getCalibrationGameIndex(), CALIBRATION_ELOS.length - 1)];
+    const performanceDelta = (weightedPerformance - 0.5) * 600;
+    const confidence = Math.min(1, calibrationGames.length / CALIBRATION_GAME_COUNT);
+    const eloEstimate = avgOpponentElo + (performanceDelta * confidence);
     return Math.max(CALIBRATION_ELO_MIN, Math.min(CALIBRATION_ELO_MAX, Math.round(eloEstimate)));
 }
 
