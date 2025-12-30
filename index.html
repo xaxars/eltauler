@@ -647,6 +647,69 @@
             background: var(--accent-purple);
             transition: width 0.3s ease;
         }
+        #calibration-result-screen {
+            width: 100%;
+            max-width: 980px;
+            margin: 0 auto;
+            display: none;
+            padding: 20px 16px 40px;
+            color: var(--text-primary);
+        }
+        .calibration-result-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .calibration-result-header h1 {
+            margin: 8px 0 6px;
+            font-size: 1.8rem;
+        }
+        .calibration-result-elo {
+            font-size: 1.4rem;
+            color: var(--accent-gold);
+        }
+        .calibration-wld {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .calibration-result-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            font-weight: bold;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        .calibration-result-badge.win { background: #4a7c59; }
+        .calibration-result-badge.loss { background: #c62828; }
+        .calibration-result-badge.draw { background: #607d8b; }
+        .calibration-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .calibration-summary-card {
+            background: var(--panel-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: var(--shadow-soft);
+        }
+        .calibration-summary-card h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            color: var(--accent-gold);
+        }
+        .calibration-chart-container {
+            height: 220px;
+        }
         .status-message.elo-reveal {
             animation: pulse-purple 1.2s ease-in-out 2;
         }        
@@ -685,7 +748,7 @@
         .bundle-success-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .bundle-success-actions .btn { flex: 1; min-width: 150px; }
         
-               .league-banner {
+        .league-banner {
             margin: 12px 0;
             padding: 14px 16px;
             background: linear-gradient(135deg, rgba(201, 162, 39, 0.12), rgba(74, 124, 89, 0.15));
@@ -694,6 +757,11 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
             color: var(--text-primary);
             cursor: pointer;
+        }
+        .league-banner.disabled {
+            opacity: 0.45;
+            pointer-events: none;
+            cursor: not-allowed;
         }
         .league-banner:hover { box-shadow: 0 10px 24px rgba(0,0,0,0.45); }
         .league-banner-header {
@@ -1278,6 +1346,40 @@
             </div>
         </div>
 
+        <div id="calibration-result-screen" style="display:none;">
+            <div class="calibration-result-header">
+                <div class="app-logo">🎯</div>
+                <h1>Resultats del calibratge</h1>
+                <div class="calibration-result-elo" id="calibration-elo-value">—</div>
+                <div class="calibration-wld">
+                    <span id="calibration-wld-summary">W 0 · L 0 · D 0</span>
+                </div>
+                <div class="calibration-wld" id="calibration-wld-row"></div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Evolució del nivell</div>
+                <div class="calibration-chart-container">
+                    <canvas id="calibration-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="calibration-summary-grid">
+                <div class="calibration-summary-card">
+                    <h3>Punts forts</h3>
+                    <ul id="calibration-strengths"></ul>
+                </div>
+                <div class="calibration-summary-card">
+                    <h3>Punts febles</h3>
+                    <ul id="calibration-weaknesses"></ul>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; text-align:center;">
+                <button class="btn btn-primary" id="btn-calibration-continue">Començar partides normals</button>
+            </div>
+        </div>
+
         <div id="stats-screen" style="display:none;">
             <div class="stats-header">
                 <div class="app-logo">📊</div>
@@ -1309,6 +1411,11 @@
                     </label>
                 </div>
                 <div class="setting-help">Tons grisos, ombres mínimes i sense animacions per llegir millor.</div>
+                <div class="setting-row">
+                    <div class="setting-label">Calibratge inicial</div>
+                    <button class="btn btn-secondary" id="btn-recalibrate">Tornar a calibrar nivell</button>
+                </div>
+                <div class="setting-help">Això resetarà el teu perfil actual.</div>
             </div>
 
             <div class="chart-container">
@@ -1566,7 +1673,7 @@
                     <div class="streak-badge">★ <span id="game-stars">0</span></div>
                 </div>
                 <div class="calibration-progress" id="calibration-progress">
-                    <div class="calibration-progress-text" id="calibration-progress-text">Avaluant nivell... 1/5</div>
+                    <div class="calibration-progress-text" id="calibration-progress-text">Calibrant... Partida 1/5</div>
                     <div class="calibration-progress-bar">
                         <div class="calibration-progress-fill" id="calibration-progress-fill"></div>
                     </div>

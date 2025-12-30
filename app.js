@@ -76,7 +76,10 @@ const CALIBRATION_ENGINE_PRECISION_RANGES = [
     { min: 72, max: 78 }
 ];
 const CALIBRATION_GAME_COUNT = 5;
-const CALIBRATION_ELOS = [400, 600, 800, 1000, 1200];
+const CALIBRATION_ELOS = [900, 1100, 1300, 1500, 1700];
+const CALIBRATION_DEPTHS = [5, 8, 10];
+const CALIBRATION_ELO_MIN = 800;
+const CALIBRATION_ELO_MAX = 2000;
 const LEAGUE_UNLOCK_MIN_GAMES = CALIBRATION_GAME_COUNT + 1;
 let recentErrors = [];
 let currentElo = clampEngineElo(ADAPTIVE_CONFIG.DEFAULT_LEVEL);
@@ -85,11 +88,15 @@ let consecutiveWins = 0;
 let consecutiveLosses = 0;
 let isCalibrating = true;
 let calibrationGames = [];
+let calibrationProfile = null;
+let calibratgeComplet = false;
 let isCalibrationGame = false;
 let currentCalibrationOpponentElo = null;
 let isEngineThinking = false;
 let engineMoveCandidates = [];
 let lastReviewSnapshot = null;
+let calibrationResultsChart = null;
+let currentGameStartTs = null;
 
 let lastPosition = null; 
 let blunderMode = false;
@@ -374,7 +381,10 @@ function buildBackupData({ includeGameHistory = false } = {}) {
         aiDifficulty: aiDifficulty, currentElo: currentElo, recentGames: recentGames, consecutiveWins: consecutiveWins,
         consecutiveLosses: consecutiveLosses, currentLeague: currentLeague, leagueActiveMatch: leagueActiveMatch,
         reviewHistory: reviewHistory, date: new Date().toLocaleDateString(),
-        isCalibrating: isCalibrating, calibrationGames: calibrationGames
+        isCalibrating: isCalibrating,
+        calibrationGames: calibrationGames,
+        calibrationProfile: calibrationProfile,
+        calibratgeComplet: calibratgeComplet
     };
     if (includeGameHistory) base.gameHistory = gameHistory;
     return base;
@@ -405,8 +415,11 @@ function importBackupData(data) {
     gameHistory = data.gameHistory || [];
        isCalibrating = typeof data.isCalibrating === 'boolean' ? data.isCalibrating : isCalibrating;
     calibrationGames = Array.isArray(data.calibrationGames) ? data.calibrationGames : calibrationGames;
-    if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
+    calibrationProfile = data.calibrationProfile || calibrationProfile;
+    calibratgeComplet = typeof data.calibratgeComplet === 'boolean' ? data.calibratgeComplet : calibratgeComplet;
+    if (calibrationGames.length >= CALIBRATION_GAME_COUNT || calibratgeComplet || calibrationProfile) {
         isCalibrating = false;
+        calibratgeComplet = true;
     }
     currentCalibrationOpponentElo = null;
     if (!isCalibrating) {
@@ -1486,12 +1499,35 @@ function adjustAIDifficulty(playerWon, precision, resultScore = null) {
 }
 
 function getCalibrationOpponentElo() {
-    return CALIBRATION_ELOS[getCalibrationGameIndex()] || CALIBRATION_ELOS[CALIBRATION_ELOS.length - 1];
+    const index = getCalibrationGameIndex();
+    if (index < 3) return CALIBRATION_ELOS[index];
+    const performance = getCalibrationPerformanceScore(calibrationGames);
+    const base = CALIBRATION_ELOS[Math.min(index, CALIBRATION_ELOS.length - 1)];
+    if (performance >= 0.7) return base + 150;
+    if (performance <= 0.45) return Math.max(CALIBRATION_ELO_MIN, base - 150);
+    return base;
 }
 
 function getCalibrationProgressCount() {
     const extra = isCalibrationGame ? 1 : 0;
     return Math.min(calibrationGames.length + extra, CALIBRATION_GAME_COUNT);
+}
+
+function getCalibrationGameDepth(gameIndex = null) {
+    const index = typeof gameIndex === 'number' ? gameIndex : getCalibrationGameIndex();
+    if (index < CALIBRATION_DEPTHS.length) return CALIBRATION_DEPTHS[index];
+    const performance = getCalibrationPerformanceScore(calibrationGames);
+    if (performance >= 0.7) return 12;
+    if (performance >= 0.55) return 10;
+    return 8;
+}
+
+function getCalibrationSkillLevel() {
+    const depth = getCalibrationGameDepth(isCalibrationGame ? calibrationGames.length : getCalibrationGameIndex());
+    const normalized = Math.max(0, Math.min(1, (depth - 5) / 10));
+    const minSkill = 6;
+    const maxSkill = 18;
+    return Math.round(minSkill + (maxSkill - minSkill) * normalized);
 }
 
 function getCalibrationPrecisionRange(gameIndex = null) {
@@ -1512,37 +1548,60 @@ function updateCalibrationProgressUI() {
         return;
     }
     const progressCount = getCalibrationProgressCount();
-    $('#calibration-progress-text').text(`Avaluant nivell... ${progressCount}/${CALIBRATION_GAME_COUNT}`);
+    $('#calibration-progress-text').text(`Calibrant... Partida ${progressCount}/${CALIBRATION_GAME_COUNT}`);
     $('#calibration-progress-fill').css('width', `${Math.round((progressCount / CALIBRATION_GAME_COUNT) * 100)}%`);
     container.show();
 }
 
+function isCalibrationRequired() {
+    return !calibratgeComplet;
+}
+
+function updateCalibrationAccessUI() {
+    const lock = isCalibrationRequired();
+    const lockableButtons = $('#btn-league, #btn-drills, #btn-bundle-menu, #btn-tv');
+    lockableButtons.prop('disabled', lock).toggleClass('btn-disabled', lock);
+    const leagueBanner = $('#league-banner');
+    if (lock) leagueBanner.addClass('disabled'); else leagueBanner.removeClass('disabled');
+}
+
+function getCalibrationGameQuality(game) {
+    const avgLoss = typeof game.avgCpLoss === 'number' ? game.avgCpLoss : 120;
+    const precisionScore = typeof game.precision === 'number' ? game.precision / 100 : 0.5;
+    const lossScore = 1 - Math.min(avgLoss, 300) / 300;
+    const blunderPenalty = Math.min(0.3, (game.blunders || 0) * 0.05);
+    return Math.max(0, Math.min(1, (lossScore * 0.6) + (precisionScore * 0.4) - blunderPenalty));
+}
+
+function getCalibrationPerformanceScore(games = calibrationGames) {
+    if (!games.length) return 0.5;
+    const total = games.reduce((sum, game) => {
+        const resultScore = game.result === 'win' ? 1 : game.result === 'loss' ? 0 : 0.5;
+        const quality = getCalibrationGameQuality(game);
+        return sum + (quality * 0.7) + (resultScore * 0.3);
+    }, 0);
+    return total / games.length;
+}
+
 function estimateCalibrationElo() {
     if (!calibrationGames.length) return clampEngineElo(ADAPTIVE_CONFIG.DEFAULT_LEVEL);
-    const totalPrecision = calibrationGames.reduce((sum, game) => sum + (typeof game.precision === 'number' ? game.precision : 50), 0);
-    const avgPrecision = Math.round(totalPrecision / calibrationGames.length);
-    const wins = calibrationGames.filter(game => game.result === 'win');
-    let baseElo = 0;
-    if (wins.length > 0) {
-        let weightSum = 0;
-        let weightedTotal = 0;
-        wins.forEach(game => {
-            const weight = Math.max(0.1, (game.precision || 50) / 100);
-            weightedTotal += game.opponentElo * weight;
-            weightSum += weight;
-        });
-        baseElo = weightedTotal / weightSum;
-    } else {
-        baseElo = calibrationGames.reduce((sum, game) => sum + game.opponentElo, 0) / calibrationGames.length;
-    }
-    const precisionAdjust = Math.round((avgPrecision - 50) * 4);
-    return clampEngineElo(Math.round(baseElo + precisionAdjust));
+    const weighted = calibrationGames.map((game, idx) => {
+        const resultScore = game.result === 'win' ? 1 : game.result === 'loss' ? 0 : 0.5;
+        const quality = getCalibrationGameQuality(game);
+        const performance = (quality * 0.7) + (resultScore * 0.3);
+        const weight = 1 + (idx * 0.1);
+        return { performance, weight };
+    });
+    const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
+    const weightedPerformance = weighted.reduce((sum, item) => sum + (item.performance * item.weight), 0) / (totalWeight || 1);
+    const eloEstimate = CALIBRATION_ELO_MIN + (weightedPerformance * (CALIBRATION_ELO_MAX - CALIBRATION_ELO_MIN));
+    return Math.max(CALIBRATION_ELO_MIN, Math.min(CALIBRATION_ELO_MAX, Math.round(eloEstimate)));
 }
 
 function showCalibrationReveal(eloValue) {
     const statusEl = $('#status');
     if (!statusEl.length) return;
-    statusEl.text(`El teu nivell: ${eloValue} ELO`).addClass('elo-reveal');
+    statusEl.text(`Calibratge completat! El teu nivell inicial és: ${eloValue} ♟️`).addClass('elo-reveal');
     setTimeout(() => statusEl.removeClass('elo-reveal'), 2200);
 }
 
@@ -1552,16 +1611,31 @@ function finalizeCalibrationFromGames() {
     updateEloHistory(userELO);
     syncEngineEloFromUser();
     isCalibrating = false;
+    calibratgeComplet = true;
     currentCalibrationOpponentElo = null;
+    calibrationProfile = {
+        elo: userELO,
+        completedAt: new Date().toISOString(),
+        games: calibrationGames.slice()
+    };
     saveStorage();
     updateDisplay();
 }
 
-function recordCalibrationGame(resultScore, precision) {
+function recordCalibrationGame(resultScore, precision, metrics) {
     const safePrecision = Math.max(0, Math.min(100, typeof precision === 'number' ? precision : 0));
     const result = resultScore === 1 ? 'win' : resultScore === 0 ? 'loss' : 'draw';
     const opponentElo = typeof currentCalibrationOpponentElo === 'number' ? currentCalibrationOpponentElo : getCalibrationOpponentElo();
-    calibrationGames.push({ opponentElo: opponentElo, result: result, precision: safePrecision });
+    const gameMetrics = metrics || {};
+    calibrationGames.push({
+        opponentElo: opponentElo,
+        result: result,
+        precision: safePrecision,
+        durationSeconds: gameMetrics.durationSeconds || 0,
+        avgCpLoss: gameMetrics.avgCpLoss || 0,
+        blunders: gameMetrics.blunders || 0,
+        tacticalPatterns: gameMetrics.tacticalPatterns || []
+    });
     if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
         finalizeCalibrationFromGames();
         return true;
@@ -1581,7 +1655,11 @@ function getAIDepth() {
     const randomness = Math.floor(Math.random() * 3) - 1;
     const effectiveDifficulty = getEffectiveAIDifficulty();
     
-    if (isCalibrationGame || currentGameMode !== 'league') {
+    if (isCalibrationGame) {
+        return Math.max(1, Math.min(15, getCalibrationGameDepth(calibrationGames.length) + randomness));
+    }
+
+    if (currentGameMode !== 'league') {
         return Math.max(1, Math.min(15, effectiveDifficulty + randomness));
     }
 
@@ -1755,6 +1833,8 @@ function loadStorage() {
     const cLosses = localStorage.getItem('chess_consecutiveLosses'); if (cLosses) consecutiveLosses = parseInt(cLosses);
        const calState = localStorage.getItem('chess_isCalibrating');
     const calGames = localStorage.getItem('chess_calibrationGames');
+    const calProfile = localStorage.getItem('chess_calibrationProfile');
+    const calComplete = localStorage.getItem('chess_calibratgeComplet');
     if (calState !== null) isCalibrating = (calState === 'true');
     if (calGames) {
         try {
@@ -1762,14 +1842,21 @@ function loadStorage() {
             if (Array.isArray(parsedGames)) calibrationGames = parsedGames;
         } catch (e) {}
     }
+    if (calProfile) {
+        try {
+            calibrationProfile = JSON.parse(calProfile);
+        } catch (e) {}
+    }
+    if (calComplete !== null) calibratgeComplet = calComplete === 'true';
     if (calState === null && localStorage.getItem('chess_isCalibrationPhase') !== null) {
         isCalibrating = localStorage.getItem('chess_isCalibrationPhase') === 'true';
     }
-    if (calState === null && !calGames && elo) {
+    if ((calibrationProfile || calibratgeComplet || calibrationGames.length >= CALIBRATION_GAME_COUNT)) {
         isCalibrating = false;
-    }
-    if (calibrationGames.length >= CALIBRATION_GAME_COUNT) {
-        isCalibrating = false;
+        calibratgeComplet = true;
+    } else if (calState === null && !calGames) {
+        isCalibrating = true;
+        calibratgeComplet = false;
     }
     const league = localStorage.getItem('chess_currentLeague'); if (league) currentLeague = JSON.parse(league);
     const lMatch = localStorage.getItem('chess_leagueActiveMatch'); if (lMatch) leagueActiveMatch = JSON.parse(lMatch);
@@ -1810,6 +1897,8 @@ function saveStorage() {
     localStorage.setItem('chess_consecutiveLosses', consecutiveLosses);
     localStorage.setItem('chess_isCalibrating', String(isCalibrating));
     localStorage.setItem('chess_calibrationGames', JSON.stringify(calibrationGames));
+    localStorage.setItem('chess_calibrationProfile', JSON.stringify(calibrationProfile));
+    localStorage.setItem('chess_calibratgeComplet', String(calibratgeComplet));
     localStorage.setItem('chess_reviewHistory', JSON.stringify(reviewHistory));
     localStorage.setItem('chess_gameHistory', JSON.stringify(gameHistory));    
     localStorage.setItem('chess_currentElo', currentElo);
@@ -1874,6 +1963,7 @@ function updateDisplay() {
     $('#current-stars').text(totalStars); $('#game-stars').text(totalStars);
     updateAdaptiveEngineEloLabel();
     updateCalibrationProgressUI();
+    updateCalibrationAccessUI();
     
     let total = savedErrors.length;
     $('#bundle-info').text(total > 0 ? `${total} errors guardats` : 'Cap error desat');
@@ -1959,6 +2049,143 @@ function summarizeReview(entries) {
         if (base[item.quality] !== undefined) base[item.quality]++;
     });
     return base;
+}
+
+function calculateAverageCpLoss(entries) {
+    const list = entries || [];
+    if (!list.length) return 0;
+    const total = list.reduce((sum, entry) => sum + (entry.swing || 0), 0);
+    return Math.round(total / list.length);
+}
+
+function countBlunders(entries, threshold = 200) {
+    return (entries || []).filter(entry => (entry.swing || 0) > threshold).length;
+}
+
+function identifyTacticalPatterns(entries, avgCpLoss, blunderCount) {
+    const counts = summarizeReview(entries);
+    const patterns = [];
+
+    if (blunderCount > 0) {
+        patterns.push('Blunders tàctics (>200 CP)');
+    }
+    if ((counts.mistake || 0) >= 2 || (counts.blunder || 0) >= 1) {
+        patterns.push('Pèrdua de material en combinacions');
+    }
+    if ((counts.inaccuracy || 0) >= 3) {
+        patterns.push('Imprecisions en la coordinació de peces');
+    }
+    if (avgCpLoss <= 60 && (counts.good + counts.excel) >= (counts.inaccuracy + counts.mistake + counts.blunder)) {
+        patterns.push('Bona execució tàctica');
+    }
+    if (patterns.length === 0) {
+        patterns.push('Sense patrons crítics destacats');
+    }
+    return patterns;
+}
+
+function getCalibrationResultsSummary() {
+    const results = calibrationGames.map(game => game.result || 'draw');
+    const wins = results.filter(r => r === 'win').length;
+    const losses = results.filter(r => r === 'loss').length;
+    const draws = results.filter(r => r === 'draw').length;
+    const avgCpLoss = calibrationGames.length
+        ? Math.round(calibrationGames.reduce((sum, game) => sum + (game.avgCpLoss || 0), 0) / calibrationGames.length)
+        : 0;
+    const blunders = calibrationGames.reduce((sum, game) => sum + (game.blunders || 0), 0);
+    const patterns = calibrationGames.flatMap(game => game.tacticalPatterns || []);
+    const patternCounts = patterns.reduce((acc, pattern) => {
+        acc[pattern] = (acc[pattern] || 0) + 1;
+        return acc;
+    }, {});
+
+    const strengths = [];
+    const weaknesses = [];
+
+    if (avgCpLoss <= 70) strengths.push('Precisió consistent al llarg del calibratge');
+    if (patternCounts['Bona execució tàctica']) strengths.push('Bona execució tàctica');
+    if (wins >= 3) strengths.push('Bona capacitat de convertir avantatges');
+
+    if (avgCpLoss > 90) weaknesses.push('Cal reduir pèrdues de centipawns');
+    if (blunders > 0) weaknesses.push('Evita blunders crítics (>200 CP)');
+    if (patternCounts['Pèrdua de material en combinacions']) weaknesses.push('Vigila les combinacions que perden material');
+    if (patternCounts['Imprecisions en la coordinació de peces']) weaknesses.push('Millora la coordinació de peces');
+
+    if (!strengths.length) strengths.push('Joc equilibrat sense punts forts clars');
+    if (!weaknesses.length) weaknesses.push('Cap feblesa crítica detectada');
+
+    return { wins, losses, draws, avgCpLoss, strengths, weaknesses };
+}
+
+function buildCalibrationChartData() {
+    return calibrationGames.map(game => {
+        const quality = getCalibrationGameQuality(game);
+        return CALIBRATION_ELO_MIN + (quality * (CALIBRATION_ELO_MAX - CALIBRATION_ELO_MIN));
+    });
+}
+
+function renderCalibrationResults() {
+    const summary = getCalibrationResultsSummary();
+    $('#calibration-elo-value').text(`${userELO} ELO`);
+    $('#calibration-wld-summary').text(`W ${summary.wins} · L ${summary.losses} · D ${summary.draws}`);
+    const resultRow = $('#calibration-wld-row');
+    resultRow.empty();
+    calibrationGames.forEach(game => {
+        const cls = game.result === 'win' ? 'win' : game.result === 'loss' ? 'loss' : 'draw';
+        const label = game.result === 'win' ? 'W' : game.result === 'loss' ? 'L' : 'D';
+        resultRow.append(`<span class="calibration-result-badge ${cls}">${label}</span>`);
+    });
+
+    const strengthsList = $('#calibration-strengths');
+    strengthsList.empty();
+    summary.strengths.forEach(item => strengthsList.append(`<li>${item}</li>`));
+
+    const weaknessesList = $('#calibration-weaknesses');
+    weaknessesList.empty();
+    summary.weaknesses.forEach(item => weaknessesList.append(`<li>${item}</li>`));
+
+    const ctx = document.getElementById('calibration-chart');
+    if (!ctx) return;
+    const labels = calibrationGames.map((_, idx) => `Partida ${idx + 1}`);
+    const data = buildCalibrationChartData();
+    if (calibrationResultsChart) calibrationResultsChart.destroy();
+    calibrationResultsChart = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Evolució del nivell',
+                data,
+                borderColor: '#c9a227',
+                backgroundColor: 'rgba(201, 162, 39, 0.15)',
+                tension: 0.3,
+                fill: true,
+                pointBackgroundColor: '#c9a227',
+                pointBorderColor: '#f4e4bc',
+                pointBorderWidth: 2,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: false, grid: { color: 'rgba(201, 162, 39, 0.1)' }, ticks: { color: '#a89a8a' } },
+                x: { grid: { color: 'rgba(201, 162, 39, 0.1)' }, ticks: { color: '#a89a8a' } }
+            }
+        }
+    });
+}
+
+function showCalibrationResultsScreen() {
+    renderCalibrationResults();
+    $('#game-screen').hide();
+    $('#league-screen').hide();
+    $('#stats-screen').hide();
+    $('#history-screen').hide();
+    $('#start-screen').hide();
+    $('#calibration-result-screen').show();
 }
 
 function persistReviewSummary(finalPrecision, resultLabel) {
@@ -3105,17 +3332,27 @@ function checkShareSupport() {
     if ((navigator.canShare && navigator.share) || supportsDirectoryPicker()) $('#btn-smart-share').show();
 }
 
+function guardCalibrationAccess() {
+    if (!isCalibrationRequired()) return true;
+    alert('Has de completar el calibratge inicial abans de jugar aquest mode.');
+    return false;
+}
+
+function novaPartida() {
+    currentGameMode = 'free';
+    currentOpponent = null;
+    if (leagueActiveMatch) { leagueActiveMatch = null; saveStorage(); }
+    startGame(false);
+}
+
 function setupEvents() {
     checkShareSupport();
     $('#btn-new-game').click(() => {
-        currentGameMode = 'free';
-        currentOpponent = null;
-        if (leagueActiveMatch) { leagueActiveMatch = null; saveStorage(); }
-        startGame(false);
+        novaPartida();
     });
 
-    $('#league-banner').on('click', () => { startLeagueRound(); });
-    $('#btn-league-banner-play').on('click', (e) => { e.stopPropagation(); startLeagueRound(); });
+    $('#league-banner').on('click', () => { if (guardCalibrationAccess()) startLeagueRound(); });
+    $('#btn-league-banner-play').on('click', (e) => { e.stopPropagation(); if (guardCalibrationAccess()) startLeagueRound(); });
 
     $('#btn-badges').click(() => { updateBadgesModal(); $('#badges-modal').css('display', 'flex'); });
     
@@ -3127,6 +3364,7 @@ function setupEvents() {
         renderGameHistory();
     });
     $('#btn-tv').click(() => {
+        if (!guardCalibrationAccess()) return;
         $('#start-screen').hide();
         $('#tv-screen').show();
         initTvBoard();
@@ -3135,12 +3373,12 @@ function setupEvents() {
         setTimeout(() => { resizeTvBoardToViewport(); }, 0);
     });
     
-    $('#btn-league').click(() => { openLeague(); });
+    $('#btn-league').click(() => { if (guardCalibrationAccess()) openLeague(); });
     $('#btn-back-league').click(() => { $('#league-screen').hide(); $('#start-screen').show(); });
-    $('#btn-league-new').click(() => { createNewLeague(true); openLeague(); });
-    $('#btn-league-play').click(() => { startLeagueRound(); });
+    $('#btn-league-new').click(() => { if (guardCalibrationAccess()) { createNewLeague(true); openLeague(); } });
+    $('#btn-league-play').click(() => { if (guardCalibrationAccess()) startLeagueRound(); });
 
-    $('#btn-drills').click(() => { showDrillsMenu(); });
+    $('#btn-drills').click(() => { if (guardCalibrationAccess()) showDrillsMenu(); });
 
     $('#btn-back-stats').click(() => {
         stopHistoryPlayback();
@@ -3157,6 +3395,31 @@ function setupEvents() {
         stopTvPlayback();
         $('#tv-screen').hide();
         $('#start-screen').show();
+    });
+
+    $('#btn-calibration-continue').click(() => {
+        $('#calibration-result-screen').hide();
+        $('#start-screen').show();
+        updateDisplay();
+    });
+
+    $('#btn-recalibrate').click(() => {
+        if (!confirm("Això resetarà el teu perfil actual. Vols continuar?")) return;
+        userELO = 50;
+        currentElo = clampEngineElo(ADAPTIVE_CONFIG.DEFAULT_LEVEL);
+        aiDifficulty = levelToDifficulty(currentElo);
+        recentGames = [];
+        consecutiveWins = 0;
+        consecutiveLosses = 0;
+        eloHistory = [];
+        calibrationGames = [];
+        calibrationProfile = null;
+        isCalibrating = true;
+        calibratgeComplet = false;
+        currentCalibrationOpponentElo = null;
+        saveStorage();
+        updateDisplay();
+        alert('Calibratge reiniciat. Comença la nova seqüència de 5 partides.');
     });
     
     $('#history-play').off('click').on('click', () => { startHistoryPlayback(); });
@@ -3245,7 +3508,7 @@ function setupEvents() {
             eloHistory = []; totalGamesPlayed = 0; totalWins = 0; maxStreak = 0;
             currentElo = clampEngineElo(userELO);
             aiDifficulty = levelToDifficulty(currentElo); recentGames = []; consecutiveWins = 0; consecutiveLosses = 0;
-            isCalibrating = true; calibrationGames = [];
+            isCalibrating = true; calibrationGames = []; calibrationProfile = null; calibratgeComplet = false;
             currentLeague = null; leagueActiveMatch = null;
             reviewHistory = []; currentReview = []; gameHistory = [];
             saveStorage(); generateDailyMissions(); updateDisplay();
@@ -3429,6 +3692,7 @@ function setupEvents() {
     });
 
     $('#btn-bundle-menu').click(() => {
+        if (!guardCalibrationAccess()) return;
         showBundleMenu();
     });
 }
@@ -3675,6 +3939,7 @@ function startGame(isBundle, fen = null) {
     $('#stats-screen').hide(); 
     $('#league-screen').hide(); 
     $('#history-screen').hide();
+    $('#calibration-result-screen').hide();
     $('#game-screen').show();
     
     blunderMode = isBundle; 
@@ -3691,6 +3956,7 @@ function startGame(isBundle, fen = null) {
     goodEngineMoves = 0;
     isEngineThinking = false;
     pendingMoveEvaluation = false;
+    currentGameStartTs = Date.now();
     
     updatePrecisionDisplay();
     updateAIPrecisionDisplay();
@@ -3831,9 +4097,9 @@ function makeEngineMove() {
 
     isEngineThinking = true; 
     $('#status').text("L'adversari pensa...");
-        
-    const depth = (currentGameMode === 'drill') ? 20 : (isCalibrationGame ? Math.max(4, getAIDepth() - 2) : getAIDepth()); 
-    const skillLevel = getEngineSkillLevel();
+
+    const depth = (currentGameMode === 'drill') ? 20 : getAIDepth(); 
+    const skillLevel = isCalibrationGame ? getCalibrationSkillLevel() : getEngineSkillLevel();
     resetEngineMoveCandidates();
 
     try { stockfish.postMessage(`setoption name Skill Level value ${skillLevel}`); } catch (e) {}
@@ -4202,7 +4468,7 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
 }
 
 function returnToMainMenuImmediate() {
-    $('#game-screen').hide(); $('#league-screen').hide(); $('#stats-screen').hide(); $('#start-screen').show();
+    $('#game-screen').hide(); $('#league-screen').hide(); $('#stats-screen').hide(); $('#calibration-result-screen').hide(); $('#start-screen').show();
     if (stockfish) stockfish.postMessage('stop');
     clearTapSelection();
     isMatchErrorReviewSession = false;
@@ -4397,6 +4663,10 @@ function handleGameOver(manualResign = false) {
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
     let leagueOutcome = 'draw';
     const finalPrecision = totalPlayerMoves > 0 ? Math.round((goodMoves / totalPlayerMoves) * 100) : 0;
+    const durationSeconds = currentGameStartTs ? Math.round((Date.now() - currentGameStartTs) / 1000) : 0;
+    const avgCpLoss = calculateAverageCpLoss(currentReview);
+    const blundersOver200 = countBlunders(currentReview, 200);
+    const tacticalPatterns = identifyTacticalPatterns(currentReview, avgCpLoss, blundersOver200);
     const calibrationGameWasActive = isCalibrationGame;
     let calibrationJustCompleted = false;
     
@@ -4451,7 +4721,12 @@ function handleGameOver(manualResign = false) {
     
     if (calibrationGameWasActive) {
         isCalibrationGame = false;
-        calibrationJustCompleted = recordCalibrationGame(resultScore, finalPrecision);
+        calibrationJustCompleted = recordCalibrationGame(resultScore, finalPrecision, {
+            durationSeconds: durationSeconds,
+            avgCpLoss: avgCpLoss,
+            blunders: blundersOver200,
+            tacticalPatterns: tacticalPatterns
+        });
     }
 
     if (!blunderMode && currentGameMode !== 'drill' && !calibrationGameWasActive) {
@@ -4491,9 +4766,16 @@ function handleGameOver(manualResign = false) {
         showCheckmate: showCheckmate
     };
     
-    const onClose = () => {
+    let onClose = () => {
         if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
     };
+    if (calibrationJustCompleted) {
+        const baseClose = onClose;
+        onClose = () => {
+            if (typeof baseClose === 'function') baseClose();
+            showCalibrationResultsScreen();
+        };
+    }
     showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
     if (calibrationJustCompleted) {
         showCalibrationReveal(userELO);
