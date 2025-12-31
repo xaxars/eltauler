@@ -199,7 +199,7 @@ const BUNDLE_ACCEPT_MODE_KEY = 'eltauler_bundle_accept_mode';
 let bundleAcceptMode = 'top1'; // 'top1' o 'top2'
 const bundleAnswerCache = new Map();
 const LLM_API_KEY_KEY = 'eltauler_llm_api_key';
-const LLM_MODEL = 'gemini-1.5-flash-latest';
+const LLM_MODEL = 'gemini-3-flash';
 
 const EPAPER_MODE_KEY = 'eltauler_epaper_mode';
 let epaperEnabled = false;
