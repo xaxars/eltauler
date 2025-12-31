@@ -3284,56 +3284,58 @@ let tvSelectedElo = TV_ELO_LEVELS[0];
 
 const TV_FALLBACK_POOL = [  
     {
-        id: 'carlsen-caruana-wcc2018-g12',
-        white: 'Magnus Carlsen',
-        black: 'Fabiano Caruana',
-        whiteElo: 2835,
-        blackElo: 2832,
-        event: 'World Championship 2018',
-        date: '2018.11.26',
+        id: 'karpov-korchnoi-wcc1978-g32',
+        white: 'Anatoly Karpov',
+        black: 'Viktor Korchnoi',
+        whiteElo: 2715,
+        blackElo: 2695,
+        event: 'World Championship 1978',
+        date: '1978.10.18',
         result: '1/2-1/2',
-        pgnText: `[Event "World Championship 2018"]
-[Site "London"]
-[Date "2018.11.26"]
-[Round "12"]
-[White "Carlsen, Magnus"]
-[Black "Caruana, Fabiano"]
+        pgnText: `[Event "World Championship 1978"]
+[Site "Baguio City"]
+[Date "1978.10.18"]
+[Round "32"]
+[White "Karpov, Anatoly"]
+[Black "Korchnoi, Viktor"]
 [Result "1/2-1/2"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 O-O 8. h3 d6 9. c3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Bd7 14. Nf1 Rac8 15. Ne3 Nc6 16. d5 Nb4 17. Bb1 a5 18. a3 Na6 19. b4 g6 20. Bd2 Qb8 21. Bd3 Nc7 22. Rc1 Nxd5 23. Nxd5 Nxd5 24. exd5 Rxc1 25. Qxc1 Rc8 26. Qb1 axb4 27. axb4 Bf6 28. Rc1 Rxc1+ 29. Qxc1 Qa8 30. Bc3 Qa2 31. Bb1 Qa6 1/2-1/2`
     },
     {
-        id: 'kasparov-topalov-1999',
+        id: 'kasparov-karpov-wcc1985-g16',
         white: 'Garry Kasparov',
-        black: 'Veselin Topalov',
-        whiteElo: 2851,
-        blackElo: 2700,
-        event: 'Wijk aan Zee 1999',
-        date: '1999.01.20',
+        black: 'Anatoly Karpov',
+        whiteElo: 2700,
+        blackElo: 2720,
+        event: 'World Championship 1985',
+        date: '1985.10.15',
         result: '1-0',
-        pgnText: `[Event "Wijk aan Zee"]
-[Site "Wijk aan Zee"]
-[Date "1999.01.20"]
+        pgnText: `[Event "World Championship 1985"]
+[Site "Moscow"]
+[Date "1985.10.15"]
+[Round "16"]
 [White "Kasparov, Garry"]
-[Black "Topalov, Veselin"]
+[Black "Karpov, Anatoly"]
 [Result "1-0"]
 
 1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0`
     },
     {
-        id: 'morphy-duke-opera-1858',
-        white: 'Paul Morphy',
-        black: 'Duke of Brunswick',
-        whiteElo: 2690,
-        blackElo: 2000,
-        event: 'Paris Opera',
-        date: '1858.11.02',
+        id: 'anand-kasparov-pca1995-g9',
+        white: 'Viswanathan Anand',
+        black: 'Garry Kasparov',
+        whiteElo: 2725,
+        blackElo: 2815,
+        event: 'PCA World Championship 1995',
+        date: '1995.09.18',
         result: '1-0',
-        pgnText: `[Event "Paris Opera"]
-[Site "Paris"]
-[Date "1858.11.02"]
-[White "Morphy, Paul"]
-[Black "Duke of Brunswick"]
+        pgnText: `[Event "PCA World Championship 1995"]
+[Site "New York"]
+[Date "1995.09.18"]
+[Round "9"]
+[White "Anand, Viswanathan"]
+[Black "Kasparov, Garry"]
 [Result "1-0"]
 
 1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`
@@ -3358,19 +3360,19 @@ const TV_FALLBACK_POOL = [
 1. c4 e6 2. Nf3 d5 3. d4 Nf6 4. Nc3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 Nxd5 9. Bxe7 Qxe7 10. Nxd5 exd5 11. Rc1 Be6 12. Qa4 c5 13. Qa3 Rc8 14. Bb5 a6 15. dxc5 bxc5 16. O-O Ra7 17. Be2 Nd7 18. Nd4 Qf8 19. Nxe6 fxe6 20. e4 d4 21. f4 Qe7 22. e5 Rb8 23. Bc4 Kh8 24. Qh3 Nf8 25. b3 a5 26. f5 exf5 27. Rxf5 Nh7 28. Rcf1 Qd8 29. Qg3 Re7 30. h4 Rbb7 31. e6 Rbc7 32. Qe5 Qe8 33. a4 Qd8 34. R1f2 Qe8 35. R2f3 Qd8 36. Bd3 Qe8 37. Qe4 Nf6 38. Rxf6 gxf6 39. Rxf6 Kg8 40. Bc4 Kh8 41. Qf4 1-0`
     },
     {
-        id: 'tal-miller-1965',
-        white: 'Mikhail Tal',
-        black: 'Miller',
-        whiteElo: 2700,
-        blackElo: 2400,
-        event: 'Los Angeles 1965',
-        date: '1965.01.01',
+        id: 'fischer-spassky-1992-g1',
+        white: 'Bobby Fischer',
+        black: 'Boris Spassky',
+        whiteElo: 2785,
+        blackElo: 2660,
+        event: 'Fischer-Spassky Rematch 1992',
+        date: '1992.09.02',
         result: '1-0',
-         pgnText: `[Event "Los Angeles"]
-[Site "Los Angeles"]
-[Date "1965.01.01"]
-[White "Tal, Mikhail"]
-[Black "Miller"]
+        pgnText: `[Event "Fischer-Spassky Rematch 1992"]
+[Site "Sveti Stefan"]
+[Date "1992.09.02"]
+[White "Fischer, Robert James"]
+[Black "Spassky, Boris"]
 [Result "1-0"]
 
 1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4 e6 5. Nc3 d6 6. Be3 Nf6 7. f4 Be7 8. Qf3 O-O 9. O-O-O Qc7 10. Nb3 a6 11. g4 b5 12. g5 Nd7 13. Bd4 Nxd4 14. Nxd4 b4 15. Nce2 Bb7 16. h4 Nc5 17. Ng3 Rfc8 18. Bh3 Qb6 19. f5 e5 20. Nf3 Nxe4 21. Nxe4 Bxe4 22. Qxe4 Rxc2+ 23. Kb1 Rac8 24. f6 Bxf6 25. gxf6 R2c4 26. Qe3 Qxf6 27. Rhf1 Qe7 28. Rxd6 a5 29. Qg5 g6 30. Rd7 Qe6 31. Qf6 1-0`    }
