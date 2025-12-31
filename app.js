@@ -3603,11 +3603,14 @@ async function requestHistoryLlmComment(entry) {
             },
             body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || 'Resposta no vàlida del servei.');
-        }
         const data = await response.json();
+        if (!response.ok) {
+            const apiMessage = data?.error?.message || 'Resposta no vàlida del servei.';
+            if (data?.error?.status === 'INVALID_ARGUMENT') {
+                throw new Error('La clau API no és vàlida o no té permisos per a Gemini. Revisa-la i comprova que l’API estigui habilitada.');
+            }
+            throw new Error(apiMessage);
+        }
         const comment = data?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
         if (!comment) {
             throw new Error('Resposta buida del model.');
