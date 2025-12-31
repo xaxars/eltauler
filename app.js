@@ -3238,115 +3238,10 @@ function formatHistoryMode(mode) {
     return 'Partida';
 }
 
-const TV_LICHESS_CHANNELS = [
-    { id: 'featured', label: 'Destacada' },
-    { id: 'classical', label: 'Clàssiques' },
-    { id: 'rapid', label: 'Ràpides' },
-    { id: 'blitz', label: 'Blitz' },
-    { id: 'bullet', label: 'Bullet' },
-    { id: 'ultraBullet', label: 'UltraBullet' },
-    { id: 'chess960', label: 'Chess960' }
-];
-
-const TV_ELO_LEVELS = [2800, 2700, 2600, 2500, 2400];
-const TV_LICHESS_RATINGS = [1600, 1800, 2000, 2200, 2500];
-const TV_LICHESS_SPEEDS = ['blitz', 'rapid', 'classical'];
-let tvSelectedElo = TV_ELO_LEVELS[0];
-
-const TV_FALLBACK_POOL = [  
-    {
-        id: 'carlsen-caruana-wcc2018-g12',
-        white: 'Magnus Carlsen',
-        black: 'Fabiano Caruana',
-        whiteElo: 2835,
-        blackElo: 2832,
-        event: 'World Championship 2018',
-        date: '2018.11.26',
-        result: '1/2-1/2',
-        pgnText: `[Event "World Championship 2018"]
-[Site "London"]
-[Date "2018.11.26"]
-[Round "12"]
-[White "Carlsen, Magnus"]
-[Black "Caruana, Fabiano"]
-[Result "1/2-1/2"]
-
-1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 O-O 8. h3 d6 9. c3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Bd7 14. Nf1 Rac8 15. Ne3 Nc6 16. d5 Nb4 17. Bb1 a5 18. a3 Na6 19. b4 g6 20. Bd2 Qb8 21. Bd3 Nc7 22. Rc1 Nxd5 23. Nxd5 Nxd5 24. exd5 Rxc1 25. Qxc1 Rc8 26. Qb1 axb4 27. axb4 Bf6 28. Rc1 Rxc1+ 29. Qxc1 Qa8 30. Bc3 Qa2 31. Bb1 Qa6 1/2-1/2`
-    },
-    {
-        id: 'kasparov-topalov-1999',
-        white: 'Garry Kasparov',
-        black: 'Veselin Topalov',
-        whiteElo: 2851,
-        blackElo: 2700,
-        event: 'Wijk aan Zee 1999',
-        date: '1999.01.20',
-        result: '1-0',
-        pgnText: `[Event "Wijk aan Zee"]
-[Site "Wijk aan Zee"]
-[Date "1999.01.20"]
-[White "Kasparov, Garry"]
-[Black "Topalov, Veselin"]
-[Result "1-0"]
-
-1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0`
-    },
-    {
-        id: 'morphy-duke-opera-1858',
-        white: 'Paul Morphy',
-        black: 'Duke of Brunswick',
-        whiteElo: 2690,
-        blackElo: 2000,
-        event: 'Paris Opera',
-        date: '1858.11.02',
-        result: '1-0',
-        pgnText: `[Event "Paris Opera"]
-[Site "Paris"]
-[Date "1858.11.02"]
-[White "Morphy, Paul"]
-[Black "Duke of Brunswick"]
-[Result "1-0"]
-
-1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`
-    },
-    {
-        id: 'fischer-spassky-1972-g6',
-        white: 'Bobby Fischer',
-        black: 'Boris Spassky',
-        whiteElo: 2785,
-        blackElo: 2660,
-        event: 'World Championship 1972',
-        date: '1972.07.23',
-        result: '1-0',
-        pgnText: `[Event "World Championship 1972"]
-[Site "Reykjavik"]
-[Date "1972.07.23"]
-[Round "6"]
-[White "Fischer, Robert James"]
-[Black "Spassky, Boris"]
-[Result "1-0"]
-
-1. c4 e6 2. Nf3 d5 3. d4 Nf6 4. Nc3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 Nxd5 9. Bxe7 Qxe7 10. Nxd5 exd5 11. Rc1 Be6 12. Qa4 c5 13. Qa3 Rc8 14. Bb5 a6 15. dxc5 bxc5 16. O-O Ra7 17. Be2 Nd7 18. Nd4 Qf8 19. Nxe6 fxe6 20. e4 d4 21. f4 Qe7 22. e5 Rb8 23. Bc4 Kh8 24. Qh3 Nf8 25. b3 a5 26. f5 exf5 27. Rxf5 Nh7 28. Rcf1 Qd8 29. Qg3 Re7 30. h4 Rbb7 31. e6 Rbc7 32. Qe5 Qe8 33. a4 Qd8 34. R1f2 Qe8 35. R2f3 Qd8 36. Bd3 Qe8 37. Qe4 Nf6 38. Rxf6 gxf6 39. Rxf6 Kg8 40. Bc4 Kh8 41. Qf4 1-0`
-    },
-    {
-        id: 'tal-miller-1965',
-        white: 'Mikhail Tal',
-        black: 'Miller',
-        whiteElo: 2700,
-        blackElo: 2400,
-        event: 'Los Angeles 1965',
-        date: '1965.01.01',
-        result: '1-0',
-         pgnText: `[Event "Los Angeles"]
-[Site "Los Angeles"]
-[Date "1965.01.01"]
-[White "Tal, Mikhail"]
-[Black "Miller"]
-[Result "1-0"]
-
-1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4 e6 5. Nc3 d6 6. Be3 Nf6 7. f4 Be7 8. Qf3 O-O 9. O-O-O Qc7 10. Nb3 a6 11. g4 b5 12. g5 Nd7 13. Bd4 Nxd4 14. Nxd4 b4 15. Nce2 Bb7 16. h4 Nc5 17. Ng3 Rfc8 18. Bh3 Qb6 19. f5 e5 20. Nf3 Nxe4 21. Nxe4 Bxe4 22. Qxe4 Rxc2+ 23. Kb1 Rac8 24. f6 Bxf6 25. gxf6 R2c4 26. Qe3 Qxf6 27. Rhf1 Qe7 28. Rxd6 a5 29. Qg5 g6 30. Rd7 Qe6 31. Qf6 1-0`    }
-
-];
+const KASPAROV_PGN_URL = `Kasparov.pgn?v=${APP_VERSION}`;
+let tvKasparovPool = [];
+let tvKasparovLoaded = false;
+let tvKasparovLoading = null;
 
 const MASTERS_OPENINGS = [
     'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -',
@@ -3359,31 +3254,16 @@ const MASTERS_OPENINGS = [
 ];
 
 const MIN_TV_MOVES = 21;
-let lastTvDynamicId = null;
-
-function mapEloToLichessRating(elo) {
-    return TV_LICHESS_RATINGS.reduce((closest, rating) => {
-        if (closest === null) return rating;
-        const currentDiff = Math.abs(rating - elo);
-        const bestDiff = Math.abs(closest - elo);
-        return currentDiff < bestDiff ? rating : closest;
-    }, null);
-}
 
 function updateTvEloUI() {
     const subtitle = document.getElementById('tv-subtitle');
     const title = document.getElementById('tv-title');
     if (subtitle) {
-        subtitle.textContent = 'Lichess TV (si està disponible) o partida aleatòria de la base de dades oberta.';
+        subtitle.textContent = 'Partides extretes del document Kasparov.';
     }
     if (title) {
        title.textContent = 'Reproducció TV';
     }
-}
-
-function randomizeTvElo() {
-    if (!TV_ELO_LEVELS.length) return;
-    tvSelectedElo = TV_ELO_LEVELS[randInt(0, TV_ELO_LEVELS.length - 1)];
 }
 
 function stopHistoryPlayback() {
@@ -3927,52 +3807,66 @@ async function fetchTopPlayerGame() {
     }
 }
 
-async function fetchLichessDbGameByElo(targetElo) {
-    const fen = MASTERS_OPENINGS[Math.floor(Math.random() * MASTERS_OPENINGS.length)];
-    const rating = mapEloToLichessRating(targetElo);
-    const speed = TV_LICHESS_SPEEDS[Math.floor(Math.random() * TV_LICHESS_SPEEDS.length)];
+async function ensureKasparovPool() {
+    if (tvKasparovLoaded) return tvKasparovPool;
+    if (tvKasparovLoading) return tvKasparovLoading;
 
-    try {
-        const response = await fetch(
-            `https://explorer.lichess.ovh/lichess?fen=${encodeURIComponent(fen)}&topGames=15&ratings=${rating}&speeds=${speed}`,
-            { headers: { 'Accept': 'application/json' } }
-        );
-        if (!response.ok) return null;
+    tvKasparovLoading = (async () => {
+        try {
+            const response = await fetch(KASPAROV_PGN_URL, {
+                headers: { 'Accept': 'application/x-chess-pgn' }
+            });
+            if (!response.ok) throw new Error('Kasparov PGN fetch failed');
+            const rawText = await response.text();
+            const blocks = splitTvPgnBlocks(rawText);
+            const parsed = [];
+            blocks.forEach((block, index) => {
+                const trimmed = block.trim();
+                if (!trimmed) return;
+                const game = new Chess();
+                if (!game.load_pgn(trimmed, { sloppy: true })) return;
+                const moves = game.history();
+                if (moves.length < MIN_TV_MOVES) return;
+                const header = game.header ? game.header() : {};
+                const result = header.Result || '*';
+                if (result === '*') return;
 
-        const data = await response.json();
-        const topGames = data.topGames || [];
-        if (!topGames.length) return null;
+                const white = header.White || 'Blanques';
+                const black = header.Black || 'Negres';
+                const date = header.Date || formatTvDate();
+                const event = header.Event || 'Kasparov';
+                const whiteElo = header.WhiteElo || '—';
+                const blackElo = header.BlackElo || '—';
+                const slug = `${white}-${black}-${date}-${index + 1}`
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/(^-|-$)/g, '');
 
-        const game = topGames[Math.floor(Math.random() * topGames.length)];
-        if (!game.id) return null;
+                parsed.push({
+                    id: `kasparov-${slug}`,
+                    white: white,
+                    black: black,
+                    whiteElo: whiteElo,
+                    blackElo: blackElo,
+                    event: event,
+                    date: date,
+                    result: result,
+                    pgnText: trimmed
+                });
+            });
 
-        const pgnResponse = await fetch(
-            `https://lichess.org/game/export/${game.id}`,
-            { headers: { 'Accept': 'application/x-chess-pgn' } }
-        );
-        if (!pgnResponse.ok) return null;
+            tvKasparovPool = parsed;
+        } catch (err) {
+            console.warn('ensureKasparovPool error:', err);
+            tvKasparovPool = [];
+        } finally {
+            tvKasparovLoaded = true;
+            tvKasparovLoading = null;
+        }
+        return tvKasparovPool;
+    })();
 
-        const pgnText = await pgnResponse.text();
-        if (!pgnText || pgnText.trim().length < 50) return null;
-
-        const whiteName = game.white?.name || 'Blanques';
-        const blackName = game.black?.name || 'Negres';
-
-        return {
-            id: `lichess-db-${game.id}`,
-            white: whiteName,
-            black: blackName,
-            whiteElo: game.white?.rating || rating || '—',
-            blackElo: game.black?.rating || rating || '—',
-            event: `Lichess ${speed}`,
-            date: game.year ? `${game.year}` : formatTvDate(),
-            result: game.winner === 'white' ? '1-0' : game.winner === 'black' ? '0-1' : '1/2-1/2',
-            pgnText: pgnText.trim()
-        };
-    } catch (err) {
-        console.warn('fetchLichessDbGameByElo error:', err);
-        return null;
-    }
+    return tvKasparovLoading;
 }
 
 async function loadTvGame(entry) {
@@ -4069,28 +3963,28 @@ function selectTvPgn(pgnText) {
 }
 
 function pickRandomTvGame() {
-    if (!TV_FALLBACK_POOL.length) return null;
-    if (!tvReplay || !tvReplay.data) return TV_FALLBACK_POOL[randInt(0, TV_FALLBACK_POOL.length - 1)];
+    if (!tvKasparovPool.length) return null;
+    if (!tvReplay || !tvReplay.data) return tvKasparovPool[randInt(0, tvKasparovPool.length - 1)];
     const currentId = tvReplay.data.id;
-    const options = TV_FALLBACK_POOL.filter(entry => entry.id !== currentId);
-    if (!options.length) return TV_FALLBACK_POOL[0];
+    const options = tvKasparovPool.filter(entry => entry.id !== currentId);
+    if (!options.length) return tvKasparovPool[0];
     return options[randInt(0, options.length - 1)];
 }
 
 async function loadRandomTvGame() {
-    randomizeTvElo();
-    const dynamicEntry = await fetchLichessDbGameByElo(tvSelectedElo);
-    if (dynamicEntry) {
-        lastTvDynamicId = dynamicEntry.id;
-        const ok = await loadTvGame(dynamicEntry);
-        if (ok) return;
+    await ensureKasparovPool();
+    if (!tvKasparovPool.length) {
+        setTvStatus('No s’ha pogut carregar el document Kasparov.', true);
+        return;
     }
-    const attempts = TV_FALLBACK_POOL.length || 1;
+    const attempts = tvKasparovPool.length || 1;
     for (let i = 0; i < attempts; i++) {
         const next = pickRandomTvGame();
+        if (!next) break;
         const ok = await loadTvGame(next);
         if (ok) return;
     }
+    setTvStatus('No s’ha pogut carregar cap partida del document Kasparov.', true);
 }
 
 function shouldTriggerTvJeroglyphics() {
