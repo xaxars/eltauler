@@ -525,17 +525,16 @@
         .badge-name { font-size: 0.8rem; color: var(--text-primary); margin-bottom: 3px; }
         .badge-req { font-size: 0.65rem; color: var(--text-secondary); }
         
-        /* BUNDLE & DRILLS MENU */
+        /* BUNDLE MENU */
         .bundle-list { text-align: left; max-height: 300px; overflow-y: auto; margin-top: 15px; }
-        .bundle-item, .drill-item {
+        .bundle-item {
             background: rgba(0,0,0,0.2); padding: 12px; margin-bottom: 8px; border-radius: 8px;
             border-left: 4px solid var(--severity-low); cursor: pointer;
             display: flex; justify-content: space-between; align-items: center;
         }
-        .drill-item { border-left-color: var(--accent-blue); }
         .bundle-item.med { border-left-color: var(--severity-med); }
         .bundle-item.high { border-left-color: var(--severity-high); }
-        .bundle-item:hover, .drill-item:hover { background: rgba(255,255,255,0.05); }
+        .bundle-item:hover { background: rgba(255,255,255,0.05); }
         .bundle-meta { font-size: 0.75rem; color: var(--text-secondary); }
         .bundle-elo { color: var(--accent-gold); font-weight: bold; }
         .bundle-remove { color: #8b3a3a; cursor: pointer; padding: 5px 10px; font-size: 0.9rem; }
@@ -597,8 +596,6 @@
         .bundle-section.high .bundle-section-count {
             color: #fff7e1;
         }
-        .bundle-section.drill .bundle-section-header { border-left: 4px solid var(--accent-blue); }
-
         .bundle-empty {
             padding: 10px 12px;
             color: var(--text-secondary);
@@ -1360,7 +1357,6 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary" id="btn-league" style="background: linear-gradient(135deg, #8d6e63 0%, #5d4037 100%); color: #f4e4bc;">🏆 Lliga</button>
-                <button class="btn btn-secondary" id="btn-drills" style="background: linear-gradient(135deg, #7c8568 0%, #555e42 100%); color: #f4e4bc;">🎓 Entrenament de Finals</button>
                 <button class="btn btn-secondary" id="btn-tv" style="background: linear-gradient(135deg, #455a64 0%, #263238 100%); color: #f4e4bc;">📺 TV</button>
                 <button class="btn btn-secondary" id="btn-bundle-menu" style="background: linear-gradient(135deg, #8b8076 0%, #60564d 100%); color: #f4e4bc;">
                     📚 Revisa Errors

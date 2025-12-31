@@ -186,23 +186,6 @@ function updateDeviceType() {
     }
 }
 
-// DRILLS DATA (Finals)
-const DRILLS = {
-    basics: [
-        { name: "Mate amb Rei i Dama", fen: "8/8/8/8/8/8/k7/4Q2K w - - 0 1" },
-        { name: "Mate amb Rei i Torre", fen: "8/8/8/8/8/8/k7/4R2K w - - 0 1" }
-    ],
-    pawns: [
-        { name: "Peó Passat (Quadrat)", fen: "8/8/8/8/8/k7/4P3/K7 w - - 0 1" },
-        { name: "Oposició Bàsica", fen: "8/8/8/8/4k3/4P3/4K3/8 w - - 0 1" },
-        { name: "Rei i Peó vs Rei", fen: "8/8/8/8/8/2k5/2P5/2K5 w - - 0 1" }
-    ],
-    advanced: [
-        { name: "Posició de Lucena", fen: "2K5/2P1k3/8/8/8/8/1r6/2R5 w - - 0 1" },
-        { name: "Final de Torres (Philidor)", fen: "2r5/8/8/8/4k3/8/3R4/3K4 w - - 0 1" }
-    ]
-};
-
 function isTouchDevice() {
     return ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
 }
@@ -430,7 +413,7 @@ function importBackupData(data) {
         gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
         bundlesSolvedLow: 0, bundlesSolvedMed: 0, bundlesSolvedHigh: 0,
         highPrecisionGames: 0, perfectGames: 0, blackWins: 0,
-        leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
+        leagueGamesPlayed: 0, freeGamesPlayed: 0
     };
     eloHistory = data.eloHistory || []; totalGamesPlayed = data.totalGamesPlayed || 0; totalWins = data.totalWins || 0; maxStreak = data.maxStreak || 0;
        const importedElo = (typeof data.currentElo === 'number') ? data.currentElo
@@ -858,8 +841,7 @@ let sessionStats = {
     perfectGames: 0, 
     blackWins: 0,
     leagueGamesPlayed: 0,
-    freeGamesPlayed: 0,
-    drillsSolved: 0
+    freeGamesPlayed: 0
 };
 
 let isAnalyzingHint = false;
@@ -895,7 +877,6 @@ const MISSION_TEMPLATES = [
     { id: 'playLeague', text: 'Juga 1 Lliga', stars: 1, check: () => sessionStats.leagueGamesPlayed >= 1 },
     { id: 'playFree', text: 'Juga 1 Lliure', stars: 1, check: () => sessionStats.freeGamesPlayed >= 1 },
     { id: 'bundle1', text: 'Resol 1 Error', stars: 1, check: () => sessionStats.bundlesSolved >= 1 },
-    { id: 'drill1', text: 'Entrena 1 Final', stars: 1, check: () => sessionStats.drillsSolved >= 1 },
     { id: 'bundleLow', text: 'Resol 1 Lleu', stars: 1, check: () => sessionStats.bundlesSolvedLow >= 1 },
     { id: 'precision70', text: 'Precisió +70%', stars: 1, check: () => sessionStats.highPrecisionGames >= 1 },
     
@@ -1323,7 +1304,7 @@ function generateDailyMissions() {
         gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
         bundlesSolvedLow: 0, bundlesSolvedMed: 0, bundlesSolvedHigh: 0,
         highPrecisionGames: 0, perfectGames: 0, blackWins: 0,
-        leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
+        leagueGamesPlayed: 0, freeGamesPlayed: 0
     };
     
     saveStorage();
@@ -1342,8 +1323,7 @@ function updateMissionsDisplay() {
     const targets = { 
         play1: 1, play3: 3, play5: 5, win2: 2, win4: 4, 
         bundle1: 1, bundle3: 3, precision70: 1, precision85: 1, blackwin: 1,
-        playLeague: 1, playFree: 1, bundleLow: 1, bundleMed: 1, bundleHigh: 1,
-        drill1: 1
+        playLeague: 1, playFree: 1, bundleLow: 1, bundleMed: 1, bundleHigh: 1
     };
     const getValue = (id) => {
         if (id === 'playLeague') return sessionStats.leagueGamesPlayed;
@@ -1351,7 +1331,6 @@ function updateMissionsDisplay() {
         if (id === 'bundleLow') return sessionStats.bundlesSolvedLow;
         if (id === 'bundleMed') return sessionStats.bundlesSolvedMed;
         if (id === 'bundleHigh') return sessionStats.bundlesSolvedHigh;
-        if (id === 'drill1') return sessionStats.drillsSolved;
         
         if (id.startsWith('play')) return sessionStats.gamesPlayed;
         if (id.startsWith('win')) return sessionStats.gamesWon;
@@ -1771,7 +1750,7 @@ function isCalibrationRequired() {
 
 function updateCalibrationAccessUI() {
     const lock = isCalibrationRequired();
-    const lockableButtons = $('#btn-league, #btn-drills, #btn-bundle-menu, #btn-tv');
+    const lockableButtons = $('#btn-league, #btn-bundle-menu, #btn-tv');
     lockableButtons.prop('disabled', lock).toggleClass('btn-disabled', lock);
     const leagueBanner = $('#league-banner');
     if (lock) leagueBanner.addClass('disabled'); else leagueBanner.removeClass('disabled');
@@ -2966,7 +2945,7 @@ Genera:
 }
 
 function registerMoveReview(swing, analysisData = {}) {
-    if (blunderMode || currentGameMode === 'drill') return;
+    if (blunderMode) return;
     const quality = classifyMoveQuality(Math.abs(swing));
     const history = game.history({ verbose: true });
     const lastMove = history[history.length - 1];
@@ -3154,7 +3133,7 @@ function showCalibrationResultsScreen() {
 }
 
 function persistReviewSummary(finalPrecision, resultLabel) {
-    if (blunderMode || currentGameMode === 'drill') { currentReview = []; return; }
+    if (blunderMode) { currentReview = []; return; }
     const summary = summarizeReview(currentReview);
     const now = new Date();
     const label = now.toLocaleDateString('ca-ES', { day: '2-digit', month: 'short' }) + ' ' + now.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
@@ -3238,115 +3217,35 @@ function formatHistoryMode(mode) {
     return 'Partida';
 }
 
-const TV_LICHESS_CHANNELS = [
-    { id: 'featured', label: 'Destacada' },
-    { id: 'classical', label: 'Clàssiques' },
-    { id: 'rapid', label: 'Ràpides' },
-    { id: 'blitz', label: 'Blitz' },
-    { id: 'bullet', label: 'Bullet' },
-    { id: 'ultraBullet', label: 'UltraBullet' },
-    { id: 'chess960', label: 'Chess960' }
-];
+// API de Lichess per partides de mestres
+const LICHESS_API = 'https://explorer.lichess.ovh/masters';
 
-const TV_ELO_LEVELS = [2800, 2700, 2600, 2500, 2400];
-const TV_LICHESS_RATINGS = [1600, 1800, 2000, 2200, 2500];
-const TV_LICHESS_SPEEDS = ['blitz', 'rapid', 'classical'];
-let tvSelectedElo = TV_ELO_LEVELS[0];
+async function getMasterGames(fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
+    const params = new URLSearchParams({
+        fen: fen,
+        topGames: 15,  // Màxim 15 partides per posició
+        moves: 12      // Màxim 12 moviments mostrats
+    });
+    
+    const response = await fetch(`${LICHESS_API}?${params}`);
+    return await response.json();
+}
 
-const TV_FALLBACK_POOL = [  
-    {
-        id: 'carlsen-caruana-wcc2018-g12',
-        white: 'Magnus Carlsen',
-        black: 'Fabiano Caruana',
-        whiteElo: 2835,
-        blackElo: 2832,
-        event: 'World Championship 2018',
-        date: '2018.11.26',
-        result: '1/2-1/2',
-        pgnText: `[Event "World Championship 2018"]
-[Site "London"]
-[Date "2018.11.26"]
-[Round "12"]
-[White "Carlsen, Magnus"]
-[Black "Caruana, Fabiano"]
-[Result "1/2-1/2"]
+// Obtenir una partida específica per ID
+async function getMasterGame(gameId) {
+    const response = await fetch(`https://lichess.org/game/export/${gameId}?pgnInJson=true`);
+    return await response.json();
+}
 
-1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 O-O 8. h3 d6 9. c3 Na5 10. Bc2 c5 11. d4 Qc7 12. Nbd2 cxd4 13. cxd4 Bd7 14. Nf1 Rac8 15. Ne3 Nc6 16. d5 Nb4 17. Bb1 a5 18. a3 Na6 19. b4 g6 20. Bd2 Qb8 21. Bd3 Nc7 22. Rc1 Nxd5 23. Nxd5 Nxd5 24. exd5 Rxc1 25. Qxc1 Rc8 26. Qb1 axb4 27. axb4 Bf6 28. Rc1 Rxc1+ 29. Qxc1 Qa8 30. Bc3 Qa2 31. Bb1 Qa6 1/2-1/2`
-    },
-    {
-        id: 'kasparov-topalov-1999',
-        white: 'Garry Kasparov',
-        black: 'Veselin Topalov',
-        whiteElo: 2851,
-        blackElo: 2700,
-        event: 'Wijk aan Zee 1999',
-        date: '1999.01.20',
-        result: '1-0',
-        pgnText: `[Event "Wijk aan Zee"]
-[Site "Wijk aan Zee"]
-[Date "1999.01.20"]
-[White "Kasparov, Garry"]
-[Black "Topalov, Veselin"]
-[Result "1-0"]
-
-1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0`
-    },
-    {
-        id: 'morphy-duke-opera-1858',
-        white: 'Paul Morphy',
-        black: 'Duke of Brunswick',
-        whiteElo: 2690,
-        blackElo: 2000,
-        event: 'Paris Opera',
-        date: '1858.11.02',
-        result: '1-0',
-        pgnText: `[Event "Paris Opera"]
-[Site "Paris"]
-[Date "1858.11.02"]
-[White "Morphy, Paul"]
-[Black "Duke of Brunswick"]
-[Result "1-0"]
-
-1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`
-    },
-    {
-        id: 'fischer-spassky-1972-g6',
-        white: 'Bobby Fischer',
-        black: 'Boris Spassky',
-        whiteElo: 2785,
-        blackElo: 2660,
-        event: 'World Championship 1972',
-        date: '1972.07.23',
-        result: '1-0',
-        pgnText: `[Event "World Championship 1972"]
-[Site "Reykjavik"]
-[Date "1972.07.23"]
-[Round "6"]
-[White "Fischer, Robert James"]
-[Black "Spassky, Boris"]
-[Result "1-0"]
-
-1. c4 e6 2. Nf3 d5 3. d4 Nf6 4. Nc3 Be7 5. Bg5 O-O 6. e3 h6 7. Bh4 b6 8. cxd5 Nxd5 9. Bxe7 Qxe7 10. Nxd5 exd5 11. Rc1 Be6 12. Qa4 c5 13. Qa3 Rc8 14. Bb5 a6 15. dxc5 bxc5 16. O-O Ra7 17. Be2 Nd7 18. Nd4 Qf8 19. Nxe6 fxe6 20. e4 d4 21. f4 Qe7 22. e5 Rb8 23. Bc4 Kh8 24. Qh3 Nf8 25. b3 a5 26. f5 exf5 27. Rxf5 Nh7 28. Rcf1 Qd8 29. Qg3 Re7 30. h4 Rbb7 31. e6 Rbc7 32. Qe5 Qe8 33. a4 Qd8 34. R1f2 Qe8 35. R2f3 Qd8 36. Bd3 Qe8 37. Qe4 Nf6 38. Rxf6 gxf6 39. Rxf6 Kg8 40. Bc4 Kh8 41. Qf4 1-0`
-    },
-    {
-        id: 'tal-miller-1965',
-        white: 'Mikhail Tal',
-        black: 'Miller',
-        whiteElo: 2700,
-        blackElo: 2400,
-        event: 'Los Angeles 1965',
-        date: '1965.01.01',
-        result: '1-0',
-         pgnText: `[Event "Los Angeles"]
-[Site "Los Angeles"]
-[Date "1965.01.01"]
-[White "Tal, Mikhail"]
-[Black "Miller"]
-[Result "1-0"]
-
-1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4 e6 5. Nc3 d6 6. Be3 Nf6 7. f4 Be7 8. Qf3 O-O 9. O-O-O Qc7 10. Nb3 a6 11. g4 b5 12. g5 Nd7 13. Bd4 Nxd4 14. Nxd4 b4 15. Nce2 Bb7 16. h4 Nc5 17. Ng3 Rfc8 18. Bh3 Qb6 19. f5 e5 20. Nf3 Nxe4 21. Nxe4 Bxe4 22. Qxe4 Rxc2+ 23. Kb1 Rac8 24. f6 Bxf6 25. gxf6 R2c4 26. Qe3 Qxf6 27. Rhf1 Qe7 28. Rxd6 a5 29. Qg5 g6 30. Rd7 Qe6 31. Qf6 1-0`    }
-
-];
+// Exemple d'ús
+async function loadClassicGames() {
+    // Partides des d'una obertura específica (ex: Siciliana)
+    const sicilianFen = 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+    const games = await getMasterGames(sicilianFen);
+    
+    console.log(`Trobades ${games.topGames.length} partides de mestres`);
+    return games.topGames; // Conté: id, white, black, winner, year, month
+}
 
 const MASTERS_OPENINGS = [
     'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -',
@@ -3359,31 +3258,16 @@ const MASTERS_OPENINGS = [
 ];
 
 const MIN_TV_MOVES = 21;
-let lastTvDynamicId = null;
-
-function mapEloToLichessRating(elo) {
-    return TV_LICHESS_RATINGS.reduce((closest, rating) => {
-        if (closest === null) return rating;
-        const currentDiff = Math.abs(rating - elo);
-        const bestDiff = Math.abs(closest - elo);
-        return currentDiff < bestDiff ? rating : closest;
-    }, null);
-}
 
 function updateTvEloUI() {
     const subtitle = document.getElementById('tv-subtitle');
     const title = document.getElementById('tv-title');
     if (subtitle) {
-        subtitle.textContent = 'Lichess TV (si està disponible) o partida aleatòria de la base de dades oberta.';
+        subtitle.textContent = 'Partides de mestres des de la base de dades de Lichess.';
     }
     if (title) {
        title.textContent = 'Reproducció TV';
     }
-}
-
-function randomizeTvElo() {
-    if (!TV_ELO_LEVELS.length) return;
-    tvSelectedElo = TV_ELO_LEVELS[randInt(0, TV_ELO_LEVELS.length - 1)];
 }
 
 function stopHistoryPlayback() {
@@ -3795,182 +3679,34 @@ function extractTvGameFromPayload(payload) {
     return null;
 }
 
-let cachedTopPlayers = null;
-let topPlayersCacheTime = 0;
-const TOP_PLAYERS_CACHE_MS = 3600000;
-
-async function getTopPlayers() {
-    const now = Date.now();
-    if (cachedTopPlayers && (now - topPlayersCacheTime) < TOP_PLAYERS_CACHE_MS) {
-        return cachedTopPlayers;
-    }
-
-    const categories = ['classical', 'rapid', 'blitz'];
-    const allUsers = new Set();
-
-    for (const cat of categories) {
-        try {
-            const response = await fetch(`https://lichess.org/api/player/top/30/${cat}`);
-            if (!response.ok) continue;
-            const data = await response.json();
-            const users = data.users || [];
-            users.forEach(u => allUsers.add(u.username));
-        } catch (err) {}
-    }
-
-    if (allUsers.size > 0) {
-        cachedTopPlayers = Array.from(allUsers);
-        topPlayersCacheTime = now;
-    }
-
-    return cachedTopPlayers || ['DrNykterstein', 'penguingim1', 'Fins0', 'lance5500', 'opperwezen'];
-}
-
-async function fetchMastersGame() {
+async function fetchMasterTvGame() {
     const fen = MASTERS_OPENINGS[Math.floor(Math.random() * MASTERS_OPENINGS.length)];
 
     try {
-        const response = await fetch(
-            `https://explorer.lichess.ovh/masters?fen=${encodeURIComponent(fen)}&topGames=15`,
-            { headers: { 'Accept': 'application/json' } }
-        );
-        if (!response.ok) return null;
-
-        const data = await response.json();
+        const data = await getMasterGames(fen);
         const topGames = data.topGames || [];
         if (!topGames.length) return null;
 
         const game = topGames[Math.floor(Math.random() * topGames.length)];
         if (!game.id) return null;
 
-        const pgnResponse = await fetch(
-            `https://lichess.org/game/export/${game.id}`,
-            { headers: { 'Accept': 'application/x-chess-pgn' } }
-        );
-        if (!pgnResponse.ok) return null;
-
-        const pgnText = await pgnResponse.text();
+        const gameData = await getMasterGame(game.id);
+        const pgnText = (gameData && gameData.pgn) ? gameData.pgn : '';
         if (!pgnText || pgnText.trim().length < 50) return null;
 
         return {
             id: `masters-${game.id}`,
-            white: game.white?.name || 'Blanques',
-            black: game.black?.name || 'Negres',
-            whiteElo: game.white?.rating || '—',
-            blackElo: game.black?.rating || '—',
-            event: 'Masters Database',
-            date: game.year ? `${game.year}` : '—',
+            white: game.white?.name || gameData?.players?.white?.user?.name || 'Blanques',
+            black: game.black?.name || gameData?.players?.black?.user?.name || 'Negres',
+            whiteElo: game.white?.rating || gameData?.players?.white?.rating || '—',
+            blackElo: game.black?.rating || gameData?.players?.black?.rating || '—',
+            event: gameData?.event || 'Masters',
+            date: game.year ? `${game.year}` : gameData?.date || formatTvDate(),
             result: game.winner === 'white' ? '1-0' : game.winner === 'black' ? '0-1' : '1/2-1/2',
             pgnText: pgnText.trim()
         };
     } catch (err) {
-        console.warn('fetchMastersGame error:', err);
-        return null;
-    }
-}
-
-async function fetchTopPlayerGame() {
-    const topPlayers = await getTopPlayers();
-    const user = topPlayers[Math.floor(Math.random() * topPlayers.length)];
-    
-    try {
-        const response = await fetch(
-            `https://lichess.org/api/games/user/${user}?max=50&finished=true&perfType=blitz,rapid,classical&clocks=false&evals=false`,
-            {
-                headers: { 'Accept': 'application/x-chess-pgn' },
-                cache: 'no-store'
-            }
-        );
-        if (!response.ok) return null;
-        
-        const allPgn = await response.text();
-        if (!allPgn || allPgn.trim().length < 50) return null;
-        
-        const games = allPgn.split(/\n(?=\[Event )/).filter(g => g.trim().length > 100);
-        if (!games.length) return null;
-        
-        const validGames = games.filter(pgn => {
-            const result = pgn.match(/\[Result\s+"([^"]+)"\]/);
-            if (!result || result[1] === '*') return false;
-            const moves = pgn.split(/\d+\.\s/).length - 1;
-            return moves >= 20;
-        });
-
-        if (!validGames.length) return null;
-        const pgnText = validGames[Math.floor(Math.random() * validGames.length)];
-        
-        const getHeader = (name) => {
-            const match = pgnText.match(new RegExp(`\\[${name}\\s+"([^"]+)"\\]`));
-            return match ? match[1] : null;
-        };
-        
-        const gameId = getHeader('Site')?.split('/').pop() || `lichess-${Date.now()}`;
-        const result = getHeader('Result');
-        
-        if (!result || result === '*') return null;
-        
-        return {
-            id: `lichess-${gameId}`,
-            white: getHeader('White') || 'Blanques',
-            black: getHeader('Black') || 'Negres',
-            whiteElo: getHeader('WhiteElo') || '—',
-            blackElo: getHeader('BlackElo') || '—',
-            event: getHeader('Event') || 'Lichess',
-            date: getHeader('UTCDate') || getHeader('Date') || formatTvDate(),
-            result: result,
-            pgnText: pgnText.trim()
-        };
-
-    } catch (err) {
-        console.warn('fetchTopPlayerGame error:', err);
-        return null;
-    }
-}
-
-async function fetchLichessDbGameByElo(targetElo) {
-    const fen = MASTERS_OPENINGS[Math.floor(Math.random() * MASTERS_OPENINGS.length)];
-    const rating = mapEloToLichessRating(targetElo);
-    const speed = TV_LICHESS_SPEEDS[Math.floor(Math.random() * TV_LICHESS_SPEEDS.length)];
-
-    try {
-        const response = await fetch(
-            `https://explorer.lichess.ovh/lichess?fen=${encodeURIComponent(fen)}&topGames=15&ratings=${rating}&speeds=${speed}`,
-            { headers: { 'Accept': 'application/json' } }
-        );
-        if (!response.ok) return null;
-
-        const data = await response.json();
-        const topGames = data.topGames || [];
-        if (!topGames.length) return null;
-
-        const game = topGames[Math.floor(Math.random() * topGames.length)];
-        if (!game.id) return null;
-
-        const pgnResponse = await fetch(
-            `https://lichess.org/game/export/${game.id}`,
-            { headers: { 'Accept': 'application/x-chess-pgn' } }
-        );
-        if (!pgnResponse.ok) return null;
-
-        const pgnText = await pgnResponse.text();
-        if (!pgnText || pgnText.trim().length < 50) return null;
-
-        const whiteName = game.white?.name || 'Blanques';
-        const blackName = game.black?.name || 'Negres';
-
-        return {
-            id: `lichess-db-${game.id}`,
-            white: whiteName,
-            black: blackName,
-            whiteElo: game.white?.rating || rating || '—',
-            blackElo: game.black?.rating || rating || '—',
-            event: `Lichess ${speed}`,
-            date: game.year ? `${game.year}` : formatTvDate(),
-            result: game.winner === 'white' ? '1-0' : game.winner === 'black' ? '0-1' : '1/2-1/2',
-            pgnText: pgnText.trim()
-        };
-    } catch (err) {
-        console.warn('fetchLichessDbGameByElo error:', err);
+        console.warn('fetchMasterTvGame error:', err);
         return null;
     }
 }
@@ -4068,29 +3804,16 @@ function selectTvPgn(pgnText) {
     return best;
 }
 
-function pickRandomTvGame() {
-    if (!TV_FALLBACK_POOL.length) return null;
-    if (!tvReplay || !tvReplay.data) return TV_FALLBACK_POOL[randInt(0, TV_FALLBACK_POOL.length - 1)];
-    const currentId = tvReplay.data.id;
-    const options = TV_FALLBACK_POOL.filter(entry => entry.id !== currentId);
-    if (!options.length) return TV_FALLBACK_POOL[0];
-    return options[randInt(0, options.length - 1)];
-}
-
 async function loadRandomTvGame() {
-    randomizeTvElo();
-    const dynamicEntry = await fetchLichessDbGameByElo(tvSelectedElo);
-    if (dynamicEntry) {
-        lastTvDynamicId = dynamicEntry.id;
-        const ok = await loadTvGame(dynamicEntry);
-        if (ok) return;
-    }
-    const attempts = TV_FALLBACK_POOL.length || 1;
+    const attempts = 4;
     for (let i = 0; i < attempts; i++) {
-        const next = pickRandomTvGame();
-        const ok = await loadTvGame(next);
-        if (ok) return;
+        const entry = await fetchMasterTvGame();
+        if (entry) {
+            const ok = await loadTvGame(entry);
+            if (ok) return;
+        }
     }
+    setTvStatus('No s’ha pogut carregar cap partida de mestres.', true);
 }
 
 function shouldTriggerTvJeroglyphics() {
@@ -4291,7 +4014,7 @@ function showHistoryReview(entry) {
 }
 
 function recordGameHistory(resultLabel, finalPrecision, counts) {
-    if (blunderMode || currentGameMode === 'drill') return;
+    if (blunderMode) return;
     const moves = game.history();
     const now = new Date();
     const entry = {
@@ -4379,8 +4102,6 @@ function setupEvents() {
     $('#btn-back-league').click(() => { $('#league-screen').hide(); $('#start-screen').show(); });
     $('#btn-league-new').click(() => { if (guardCalibrationAccess()) { createNewLeague(true); openLeague(); } });
     $('#btn-league-play').click(() => { if (guardCalibrationAccess()) startLeagueRound(); });
-
-    $('#btn-drills').click(() => { if (guardCalibrationAccess()) showDrillsMenu(); });
 
     $('#btn-reset-league').click(() => {
         if (!guardCalibrationAccess()) return;
@@ -4524,7 +4245,7 @@ function setupEvents() {
                 gamesPlayed: 0, gamesWon: 0, bundlesSolved: 0, 
                 bundlesSolvedLow: 0, bundlesSolvedMed: 0, bundlesSolvedHigh: 0,
                 highPrecisionGames: 0, perfectGames: 0, blackWins: 0,
-                leagueGamesPlayed: 0, freeGamesPlayed: 0, drillsSolved: 0
+                leagueGamesPlayed: 0, freeGamesPlayed: 0
             };
             eloHistory = []; totalGamesPlayed = 0; totalWins = 0; maxStreak = 0;
             currentElo = clampEngineElo(userELO);
@@ -4717,52 +4438,6 @@ function setupEvents() {
         showBundleMenu();
     });
 }
-
-// --- DRILLS LOGIC ---
-function showDrillsMenu() {
-    $('#bundle-modal').remove();
-
-    let html = '<div class="modal-overlay" id="bundle-modal" style="display:flex;"><div class="modal-content">';
-    html += '<div class="modal-title">🎓 Entrenament</div>';
-    html += '<div class="bundle-folder-list">';
-
-    const categories = [
-        { id: 'basics', title: 'Bàsics', icon: '♟️' },
-        { id: 'pawns', title: 'Peons', icon: '🏗️' },
-        { id: 'advanced', title: 'Avançats', icon: '🔥' }
-    ];
-
-    categories.forEach(cat => {
-        const drills = DRILLS[cat.id];
-        html += `<div class="bundle-section drill open">`;
-        html += '<div class="bundle-section-header">';
-        html += `<div class="bundle-section-title">${cat.icon} ${cat.title}</div>`;
-        html += '</div>';
-
-        html += '<div class="bundle-section-content" style="display:block;">';
-        html += '<div class="bundle-list">';
-        drills.forEach((d) => {
-            html += `<div class="drill-item" onclick="startDrill('${d.fen}', '${d.name}')">`;
-            html += `<div><strong>${d.name}</strong></div>`;
-            html += '</div>';
-        });
-        html += '</div></div></div>';
-    });
-
-    html += '</div>'; 
-    html += '<button class="close-modal" onclick="$(\'#bundle-modal\').remove()">Tancar</button></div></div>';
-    $('body').append(html);
-}
-
-window.startDrill = function(fen, name) {
-    $('#bundle-modal').remove(); 
-    
-    currentGameMode = 'drill';
-    currentOpponent = null;
-    $('#game-mode-title').text('🎓 ' + name);
-    
-    startGame(false, fen); 
-};
 
 function showBundleMenu() {
     if (savedErrors.length === 0) { alert('No tens errors guardats'); return; }
@@ -4964,7 +4639,7 @@ function startGame(isBundle, fen = null) {
     $('#game-screen').show();
     
     blunderMode = isBundle; 
-    isCalibrationGame = isCalibrationActive() && !isBundle && currentGameMode !== 'drill';
+    isCalibrationGame = isCalibrationActive() && !isBundle;
     currentBundleFen = fen;
     lastHumanMoveUci = null;
     isBundleStrictAnalysis = false;
@@ -4991,10 +4666,7 @@ function startGame(isBundle, fen = null) {
     let boardOrientation = 'white';
     
     // LÒGICA DE COLORS
-    if (currentGameMode === 'drill') {
-        playerColor = game.turn();
-        boardOrientation = (playerColor === 'w') ? 'white' : 'black';
-    } else if (isBundle) {
+    if (isBundle) {
         playerColor = game.turn();
         boardOrientation = (playerColor === 'w') ? 'white' : 'black';
     } else {
@@ -5041,9 +4713,6 @@ function startGame(isBundle, fen = null) {
         if (engineReady) applyEngineEloStrength(currentCalibrationOpponentElo);
         $('#engine-elo').text(`ELO ${currentCalibrationOpponentElo}`);
         $('#game-mode-title').text('🎯 Partida de calibratge');
-    } else if (currentGameMode === 'drill') {
-        $('#engine-elo').text('Mestre');
-        $('#engine-elo').text('Mestre');
     } else if (isBundle) {
         currentGameMode = 'bundle';
         currentOpponent = null;
@@ -5086,7 +4755,7 @@ function onDragStart(source, piece, position, orientation) {
     if (game.game_over() || isEngineThinking) return false;
     if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || 
         (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
-    if ((currentGameMode === 'drill' || blunderMode) && game.turn() !== playerColor) return false;
+    if (blunderMode && game.turn() !== playerColor) return false;
 }
 
 function onDrop(source, target) {
@@ -5120,7 +4789,7 @@ function makeEngineMove() {
     isEngineThinking = true; 
     $('#status').text("L'adversari pensa...");
 
-    const depth = (currentGameMode === 'drill') ? 20 : getAIDepth(); 
+    const depth = getAIDepth(); 
     const skillLevel = isCalibrationGame ? getCalibrationSkillLevel() : getEngineSkillLevel();
     resetEngineMoveCandidates();
 
@@ -5414,7 +5083,7 @@ function handleEngineMessage(rawMsg) {
                 evalAfter: pendingEvalAfter
             });
             
-            if (swing > 250 && !blunderMode && currentGameMode !== 'drill') {
+            if (swing > 250 && !blunderMode) {
                 let severity = 'low';
                 if (swing > 800) severity = 'high';
                 else if (swing > 500) severity = 'med';
@@ -5832,7 +5501,7 @@ function registerEngineMovePrecision(moveStr, candidates) {
 }
 
 function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = []) {
-     if (!blunderMode && currentGameMode !== 'drill') {
+     if (!blunderMode) {
         const alreadyTracked = currentGameErrors.some(e => e.fen === fen);
         if (!alreadyTracked) {
             currentGameErrors.push({
@@ -5904,23 +5573,6 @@ function handleGameOver(manualResign = false) {
     if (finalPrecision >= 70) sessionStats.highPrecisionGames++;
     if (finalPrecision >= 85) sessionStats.perfectGames++;
     
-    // LÒGICA DRILLS
-    if (currentGameMode === 'drill') {
-        if (playerWon) {
-            alert("Entrenament completat! 🎉");
-            sessionStats.drillsSolved++;
-            checkMissions();
-            returnToMainMenuImmediate();
-            return;
-        } else {
-            if(confirm("Entrenament fallit. Vols tornar-ho a provar?")) {
-                game.undo(); board.position(game.fen()); return;
-            } else {
-                returnToMainMenuImmediate(); return;
-            }
-        }
-    }
-
     if (!calibrationGameWasActive && !isLeagueMode && !shouldContinuousAdjust) {
         change = calculateEloDelta(resultScore);
         msg += ` (${formatEloChange(change)})`;
@@ -5944,7 +5596,7 @@ function handleGameOver(manualResign = false) {
         });
     }
 
-    if (!blunderMode && currentGameMode !== 'drill' && !calibrationGameWasActive) {
+    if (!blunderMode && !calibrationGameWasActive) {
         if (shouldContinuousAdjust) {
             const adjustResult = registerFreeGameAdjustment(resultScore, finalPrecision, {
                 avgCpLoss: avgCpLoss,
