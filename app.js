@@ -3655,19 +3655,20 @@ ERRORS CONCRETS (menciona les jugades explícitament!)
 ${errorsDetail || 'Cap error greu.'}
 
 INSTRUCCIONS
-1. Comença amb un TÍTOL que sigui la màxima principal de la partida entre cometes (ex: "Abans d'atacar, assegura el rei")
-2. Paràgraf breu de felicitació/resum general
-3. Per CADA error: menciona EXPLÍCITAMENT "Quan vas jugar [jugada]..." i inclou UNA màxima entre cometes
-4. Tancament amb el principi clau
+1. Comença amb un TÍTOL que sigui la màxima principal de la partida entre cometes dobles (per exemple: "Les peces han de treballar juntes")
+2. Redacta un paràgraf d'anàlisi general que resumeixi el rendiment i la precisió, evitant felicitacions personals o un to excessivament fraternalista
+3. Per a cada error, utilitza l'estructura "Quan vas jugar [jugada] a la jugada [número]..." i acompanya-ho sempre d'una descripció clara de l'acció (per exemple: "en capturar el peó amb la reina" o "en retrocedir l'alfil") perquè s'entengui el moviment sense dependre del nom de la casella. Cada explicació d'error ha d'incloure una màxima universal entre cometes
+4. Finalitza amb un paràgraf de conclusió centrat en el principi clau per millorar en el futur
 
 REGLES
 - Màxim 350 paraules
-- Prosa natural, sense llistes ni asteriscs
-- Menciona les jugades concretes (ex: "Quan vas jugar Dxe4 a la jugada 23...")
-- Màximes universals entre cometes dobles
-- To càlid i encoratjador
+- Prosa natural organitzada exclusivament en paràgrafs. No utilitzis llistes, numeracions ni asteriscs
+- Descriu la jugada identificant exclusivament la peça i l'acció mecànica realitzada.
+- Totes les lliçons estratègiques han d'anar entre cometes dobles
+- Manté un to objectiu, analític i professional, evitant un llenguatge massa familiar o emotiu
+- Crea Màximes noves coherents amb la partida i els principis dels escacs
 
-MÀXIMES VÀLIDES
+MÀXIMES VÀLIDES 
 "Desenvolupa les peces abans d'atacar"
 "El rei al centre és un rei en perill"
 "Controla el centre per controlar la partida"
