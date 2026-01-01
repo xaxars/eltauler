@@ -3608,7 +3608,7 @@ function buildGeminiReviewPrompt(entry, severeErrors) {
         ? severeErrors.map(err => `- Pèrdua aprox.: ${err.swing || '—'} cp · Captura: ${err.isCapture ? 'Sí' : 'No'} · Escac: ${err.isCheck ? 'Sí' : 'No'}`).join('\n')
         : '- Cap error greu detectat.';
 
-    return `Ets un mestre d'escacs que escriu contes zen per aprendre.
+    return `Ets un mestre d'escacs que transmet saviesa a través de paràboles de batalla.
 Escriu en català. No facis servir numeracions de moviments, coordenades ni posicions exactes.
 
 DADES DE LA PARTIDA:
@@ -3621,14 +3621,14 @@ ERRORS GREUS:
 ${errorsText}
 
 Entrega:
-- Comença amb una màxima o principi curt.
-- Escriu un petit conte zen de 3-5 frases on el jugador aprengui dels errors.
-- Dona una màxima general per tota la partida.
-- Dona una màxima per cada error greu (si no n'hi ha, explica que la lliçó és global).
-- No numeris ni facis llistes; usa frases clares i breus.
-- IMPORTANT: La resposta ha de tenir UN MÍNIM DE 400 PARAULES i UN MÀXIM DE 600 PARAULES.
-- Compta les paraules abans d'enviar.
-- Si la resposta és més curta de 400 paraules, afegeix més detalls i explicacions.`;
+- Comença amb una màxima clàssica d'escacs (Capablanca, Tarrasch, Nimzowitsch, Steinitz, etc.)
+- Escriu una paràbola breu (2-3 frases) sobre un guerrer en batalla que reflecteixi els errors comesos
+- Dona una màxima d'escacs general per tota la partida
+- Dona una màxima d'escacs per cada error greu (si no n'hi ha, explica que la lliçó és global)
+- No numeris ni facis llistes; usa frases clares i breus
+- IMPORTANT: La resposta ha de tenir UN MÍNIM DE 400 PARAULES i UN MÀXIM DE 600 PARAULES
+- Compta les paraules abans d'enviar
+- Si la resposta és més curta de 400 paraules, afegeix més context estratègic i tàctic`;
 }
 
 async function requestGeminiReview(entry, severeErrors) {
