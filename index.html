@@ -293,7 +293,31 @@
             font-family: 'Crimson Pro', serif;
             font-size: 0.9rem;
         }
+        .text-input {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text-primary);
+            padding: 8px 10px;
+            border-radius: 10px;
+            font-family: 'Crimson Pro', serif;
+            font-size: 0.9rem;
+            flex: 1 1 auto;
+            min-width: 160px;
+        }
+        .setting-inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+        .setting-status {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 56px;
+            text-align: right;
+        }
         body.epaper-mode .select-control { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
+        body.epaper-mode .text-input { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
         .setting-help { margin-top: 8px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.25; }
         body.epaper-mode .header,
         body.epaper-mode .precision-panel,
@@ -865,6 +889,28 @@
             background: #ededed;
             border-color: #cfcfcf;
         }
+        body.device-desktop .history-detail {
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            grid-template-rows: auto auto auto auto auto;
+            gap: 10px 14px;
+        }
+        body.device-desktop .history-detail-header {
+            grid-column: 1 / -1;
+        }
+        body.device-desktop .history-review {
+            grid-column: 1;
+            grid-row: 2 / span 4;
+            align-self: start;
+        }
+        body.device-desktop .history-board {
+            grid-column: 2;
+        }
+        body.device-desktop .history-controls,
+        body.device-desktop .history-actions,
+        body.device-desktop .history-progress {
+            grid-column: 2;
+        }
         .history-detail-header {
             display: flex;
             flex-direction: column;
@@ -878,6 +924,31 @@
             max-width: 360px;
             margin: 10px auto 12px;
         }
+        .history-review {
+            background: rgba(0,0,0,0.18);
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid rgba(201, 162, 39, 0.12);
+            margin-top: 10px;
+        }
+        body.epaper-mode .history-review {
+            background: #ededed;
+            border-color: #cfcfcf;
+        }
+        .history-review-title {
+            font-family: 'Cinzel', serif;
+            font-size: 0.85rem;
+            color: var(--accent-gold);
+            margin-bottom: 6px;
+        }
+        body.epaper-mode .history-review-title { color: #222; }
+        .history-review-content {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            line-height: 1.35;
+        }
+        body.epaper-mode .history-review-content { color: #444; }
         #history-board {
             width: 100%;
             border-radius: 12px;
@@ -899,6 +970,14 @@
             gap: 8px;
             flex-wrap: wrap;
             margin-bottom: 8px;
+        }
+        .history-actions {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .history-actions .btn {
+            max-width: 240px;
         }
         .history-progress {
             text-align: center;
@@ -1451,6 +1530,15 @@
                     <button class="btn btn-secondary" id="btn-recalibrate">Tornar a calibrar nivell</button>
                 </div>
                 <div class="setting-help">Això resetarà el teu perfil actual.</div>
+                <div class="setting-row" style="margin-top:10px;">
+                    <div class="setting-label">Clau API Gemini (gemini-3-flash-preview)</div>
+                    <div class="setting-inline">
+                        <input type="password" id="gemini-key-input" class="text-input" placeholder="Enganxa la clau">
+                        <button class="btn btn-secondary" id="btn-save-gemini-key">Guardar</button>
+                    </div>
+                    <div class="setting-status" id="gemini-key-status">—</div>
+                </div>
+                <div class="setting-help">La clau queda guardada i les revisions de partides es generen automàticament.</div>
             </div>
 
             <div class="chart-container">
@@ -1534,6 +1622,13 @@
                             <button class="btn btn-primary" id="history-play">▶️ Play</button>
                             <button class="btn btn-secondary" id="history-pause">⏸️ Pausa</button>
                             <button class="btn btn-secondary" id="history-next">⏭️ Endavant</button>
+                        </div>
+                        <div class="history-actions">
+                            <button class="btn btn-secondary" id="history-generate-review">✨ Generar ressenya</button>
+                        </div>
+                        <div class="history-review">
+                            <div class="history-review-title">Historial revisió</div>
+                            <div class="history-review-content" id="history-review-content">—</div>
                         </div>
                         <div class="history-progress" id="history-progress">0/0</div>
                     </div>
