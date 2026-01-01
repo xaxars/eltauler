@@ -3608,7 +3608,7 @@ function buildGeminiReviewPrompt(entry, severeErrors) {
         ? severeErrors.map(err => `- Pèrdua aprox.: ${err.swing || '—'} cp · Captura: ${err.isCapture ? 'Sí' : 'No'} · Escac: ${err.isCheck ? 'Sí' : 'No'}`).join('\n')
         : '- Cap error greu detectat.';
 
-    return `Ets un mestre d'escacs que transmet saviesa a través de paràboles de batalla.
+    return `Ets un mestre d'escacs que transmet principis universals del joc a través de paràboles de batalla.
 Escriu en català. No facis servir numeracions de moviments, coordenades ni posicions exactes.
 
 DADES DE LA PARTIDA:
@@ -3621,10 +3621,11 @@ ERRORS GREUS:
 ${errorsText}
 
 Entrega:
-- Comença amb una màxima clàssica d'escacs (Capablanca, Tarrasch, Nimzowitsch, Steinitz, etc.)
-- Escriu una paràbola breu (2-3 frases) sobre un guerrer en batalla que reflecteixi els errors comesos
-- Dona una màxima d'escacs general per tota la partida
-- Dona una màxima d'escacs per cada error greu (si no n'hi ha, explica que la lliçó és global)
+- Comença amb un PRINCIPI UNIVERSAL d'escacs (exemples: "Controla el centre del tauler", "Desenvolupa les peces abans d'atacar", "Protegeix el rei abans de buscar l'atac", "La iniciativa val més que material", "Les peces coordinades són més fortes que les aïllades")
+- Escriu una paràbola breu (2-3 frases) sobre un guerrer en batalla
+- Dona un principi universal d'escacs per tota la partida
+- Dona un principi universal d'escacs per cada error greu
+- Les màximes han de ser aplicables a qualsevol posició de tauler, NO cites de mestres
 - No numeris ni facis llistes; usa frases clares i breus
 - IMPORTANT: La resposta ha de tenir UN MÍNIM DE 400 PARAULES i UN MÀXIM DE 600 PARAULES
 - Compta les paraules abans d'enviar
