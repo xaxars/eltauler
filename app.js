@@ -3601,6 +3601,16 @@ function getSevereErrors(entries) {
     return (entries || [])
         .filter(entry => entry.quality === 'blunder' || (entry.swing || 0) >= 200)
         .map(entry => ({
+            fen: entry.fen || null,
+            moveNumber: entry.moveNumber || null,
+            playerMove: entry.playerMove || null,
+            playerMoveSan: entry.playerMoveSan || null,
+            bestMove: entry.bestMove || null,
+            bestMoveSan: entry.bestMoveSan || null,
+            bestMovePv: entry.bestMovePv || [],
+            bestMovePvSan: entry.bestMovePvSan || [],
+            evalBefore: entry.evalBefore ?? null,
+            evalAfter: entry.evalAfter ?? null,
             swing: entry.swing || null,
             isCapture: !!entry.isCapture,
             isCheck: !!entry.isCheck
@@ -3630,57 +3640,43 @@ function buildGeminiReviewPrompt(entry, severeErrors) {
         const fen = err.fen || '';
         const pvLine = (err.bestMovePvSan || err.bestMovePv || []).slice(0, 4).join(' ');
         
-        return `Error a la jugada ${moveNum}: vas jugar ${played} però calia ${best}. Línia: ${pvLine || '—'}. Pèrdua: ${swing} cp. FEN: ${fen}`;
+        return `Error ${idx + 1}: Jugada ${moveNum}, vas jugar ${played}, calia ${best}. Pèrdua: ${swing}cp. Continuació: ${pvLine || '—'}. FEN: ${fen}`;
     }).join('\n');
 
     const totalMoves = moves.length;
     
-    return `Ets un mestre d'escacs que ensenya amb principis clars i memorables.
-Escriu en català. Usa un to càlid i proper, com si parlessis amb un amic.
+    return `Ets un mestre d'escacs amable que ensenya amb màximes memorables.
 
-DADES DE LA PARTIDA
-Resultat: ${entry.result || '—'}
-Precisió: ${typeof entry.precision === 'number' ? `${entry.precision}%` : '—'}
-Jugades: ${totalMoves}
-Bones jugades: ${(summary.excel || 0) + (summary.good || 0)}
-Errors lleus: ${summary.inaccuracy || 0}
-Errors greus: ${(summary.mistake || 0) + (summary.blunder || 0)}
+DADES
+Resultat: ${entry.result || '—'} | Precisió: ${typeof entry.precision === 'number' ? `${entry.precision}%` : '—'} | Jugades: ${totalMoves}
+Bones: ${(summary.excel || 0) + (summary.good || 0)} | Imprecisions: ${summary.inaccuracy || 0} | Errors greus: ${(summary.mistake || 0) + (summary.blunder || 0)}
 
-ERRORS A ANALITZAR
-${errorsDetail || 'Partida sense errors greus.'}
+ERRORS CONCRETS (menciona les jugades explícitament!)
+${errorsDetail || 'Cap error greu.'}
 
 INSTRUCCIONS
+1. Comença amb un TÍTOL que sigui la màxima principal de la partida entre cometes (ex: "Abans d'atacar, assegura el rei")
+2. Paràgraf breu de felicitació/resum general
+3. Per CADA error: menciona EXPLÍCITAMENT "Quan vas jugar [jugada]..." i inclou UNA màxima entre cometes
+4. Tancament amb el principi clau
 
-Escriu una revisió en prosa natural, sense enumeracions ni llistes amb punts o números. El text ha de fluir com una conversa.
+REGLES
+- Màxim 350 paraules
+- Prosa natural, sense llistes ni asteriscs
+- Menciona les jugades concretes (ex: "Quan vas jugar Dxe4 a la jugada 23...")
+- Màximes universals entre cometes dobles
+- To càlid i encoratjador
 
-Estructura el text així:
-
-Primer, fes un paràgraf curt sobre com ha anat la partida en general. Destaca què s'ha fet bé abans de parlar dels errors.
-
-Després, per cada error greu, dedica un paràgraf que inclogui:
-- Una MÀXIMA D'ESCACS entre cometes que s'apliqui a l'error (exemples: "Les peces han de treballar juntes", "El rei al centre és un rei en perill", "No moguis la mateixa peça dues vegades a l'obertura", "Abans d'atacar, assegura el rei", "Cada jugada ha de tenir un propòsit")
-- Explica amb paraules senzilles per què la jugada era un error i què feia millor la jugada correcta
-- Relaciona l'error amb la màxima
-
-Finalment, un paràgraf de tancament amb el principi més important a recordar d'aquesta partida.
-
-REGLES D'ESTIL
-- No facis servir asteriscs, guions, números ni cap tipus de llista
-- Les màximes van sempre entre cometes dobles
-- Usa paraules senzilles: "torre" no "columna oberta per la torre pesada"
-- Explica els conceptes: si dius "forquilla", afegeix "atacar dues peces alhora"
-- El to ha de ser encoratjador, mai crític
-- Màxim 400 paraules
-- Cada màxima ha de ser un principi universal aplicable a moltes partides
-
-EXEMPLES DE BONES MÀXIMES
+MÀXIMES VÀLIDES
 "Desenvolupa les peces abans d'atacar"
-"Un cavall a la vora del tauler té menys força"
+"El rei al centre és un rei en perill"
 "Controla el centre per controlar la partida"
-"Quan dubtes, millora la teva pitjor peça"
-"No canviïs peces sense motiu quan vas guanyant"
-"El rei és una peça forta als finals"
 "Les torres necessiten columnes obertes"
+"Un cavall a la vora té menys força"
+"Abans de moure, mira què ataca el rival"
+"Cada jugada ha de tenir un propòsit"
+"Les peces han de treballar juntes"
+"No canviïs peces sense motiu quan vas guanyant"
 "Peó passat, peó que corre"`;
 }
 
@@ -3716,8 +3712,8 @@ async function requestGeminiReview(entry, severeErrors) {
         const data = await response.json();
         let text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('')?.trim();
         if (!text) throw new Error('Resposta buida de Gemini');
-        if (text.length > 2500) {
-            text = text.slice(0, 2500).trim();
+        if (text.length > 4000) {
+            text = text.slice(0, 4000).trim();
         }
         entry.geminiReview = { status: 'done', text };
     } catch (error) {
