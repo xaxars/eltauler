@@ -889,6 +889,28 @@
             background: #ededed;
             border-color: #cfcfcf;
         }
+        body.device-desktop .history-detail {
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            grid-template-rows: auto auto auto auto auto;
+            gap: 10px 14px;
+        }
+        body.device-desktop .history-detail-header {
+            grid-column: 1 / -1;
+        }
+        body.device-desktop .history-review {
+            grid-column: 1;
+            grid-row: 2 / span 4;
+            align-self: start;
+        }
+        body.device-desktop .history-board {
+            grid-column: 2;
+        }
+        body.device-desktop .history-controls,
+        body.device-desktop .history-actions,
+        body.device-desktop .history-progress {
+            grid-column: 2;
+        }
         .history-detail-header {
             display: flex;
             flex-direction: column;
@@ -1595,10 +1617,6 @@
                         <div class="history-board">
                             <div id="history-board"></div>
                         </div>
-                        <div class="history-review">
-                            <div class="history-review-title">Historial revisió</div>
-                            <div class="history-review-content" id="history-review-content">—</div>
-                        </div>
                         <div class="history-controls">
                             <button class="btn btn-secondary" id="history-prev">⏮️ Endarrere</button>
                             <button class="btn btn-primary" id="history-play">▶️ Play</button>
@@ -1607,6 +1625,10 @@
                         </div>
                         <div class="history-actions">
                             <button class="btn btn-secondary" id="history-generate-review">✨ Generar ressenya</button>
+                        </div>
+                        <div class="history-review">
+                            <div class="history-review-title">Historial revisió</div>
+                            <div class="history-review-content" id="history-review-content">—</div>
                         </div>
                         <div class="history-progress" id="history-progress">0/0</div>
                     </div>

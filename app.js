@@ -3621,10 +3621,12 @@ ERRORS GREUS:
 ${errorsText}
 
 Entrega:
-1) Un petit conte zen de 3-5 frases on el jugador aprengui dels errors.
-2) Una màxima general per tota la partida.
-3) Una màxima per cada error greu (si no n'hi ha, explica que la lliçó és global).
-No enumeris les màximes amb números, usa frases clares i breus.`;
+- Comença amb una màxima o principi curt.
+- Escriu un petit conte zen de 3-5 frases on el jugador aprengui dels errors.
+- Dona una màxima general per tota la partida.
+- Dona una màxima per cada error greu (si no n'hi ha, explica que la lliçó és global).
+- No numeris ni facis llistes; usa frases clares i breus.
+- Màxim 1000 caràcters.`;
 }
 
 async function requestGeminiReview(entry, severeErrors) {
@@ -3655,8 +3657,11 @@ async function requestGeminiReview(entry, severeErrors) {
             throw new Error(`Gemini error ${response.status}`);
         }
         const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('')?.trim();
+        let text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('')?.trim();
         if (!text) throw new Error('Resposta buida de Gemini');
+        if (text.length > 1000) {
+            text = text.slice(0, 1000).trim();
+        }
         entry.geminiReview = { status: 'done', text };
     } catch (error) {
         entry.geminiReview = {
