@@ -3901,7 +3901,7 @@ async function requestGeminiBundleHint() {
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
                     temperature: 0.85,  // ← Incrementat de 0.7
-                    maxOutputTokens: 512,  // ← Incrementat de 120
+                    maxOutputTokens: 1024,  // ← Incrementat de 120
                     topP: 0.95,
                     topK: 40
                 }
