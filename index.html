@@ -515,6 +515,17 @@
             box-shadow: 0 4px 15px rgba(123, 31, 162, 0.4);
             border: 1px solid rgba(255,255,255,0.2);
         }
+        .btn-brain-hint {
+            background: linear-gradient(135deg, #324a88, #1b2e5e);
+            color: #f4f6ff;
+            box-shadow: 0 4px 14px rgba(49, 68, 122, 0.35);
+            border: 1px solid rgba(255,255,255,0.18);
+        }
+        .btn-brain-hint img {
+            width: 20px;
+            height: 20px;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
+        }
         
         .btn-danger {
             background: linear-gradient(135deg, #c62828, #8b0000);
@@ -1827,6 +1838,10 @@
                 <div class="status-message" id="status">Preparat...</div>
                 <div class="game-buttons">
                     <button class="btn btn-hint" id="btn-hint" title="Demanar pista">💡 Pista</button>
+                    <button class="btn btn-brain-hint" id="btn-brain-hint" title="Màxima amb Gemini" style="display:none;">
+                        <img src="brain.svg" alt="Cervell">
+                        <span>Màxima</span>
+                    </button>
                     <button class="btn btn-secondary" id="btn-back">Menú</button>
                     <button class="btn btn-primary" id="btn-resign">Rendir-se</button>
                 </div>
