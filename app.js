@@ -3805,31 +3805,56 @@ function getEntrySevereErrors(entry) {
     return [];
 }
 
-function buildGeminiBundleHintPrompt(step) {
+function buildGeminiBundleHintPrompt(step, context = {}) {
     const stepNumber = step === 2 ? 2 : 1;
     const sentenceCount = stepNumber === 1 ? 2 : 1;
     const sentenceText = sentenceCount === 1 ? '1 frase' : '2 frases';
     
+    // Construir context posicional
+    let contextText = '';
+    if (context.fen) {
+        contextText += `\nPOSICIÓ (FEN): ${context.fen}`;
+    }
+    if (context.playerMove) {
+        contextText += `\nJugada feta: ${context.playerMove}`;
+    }
+    if (context.bestMove) {
+        contextText += `\nMillor jugada: ${context.bestMove}`;
+    }
+    if (context.bestMovePv && context.bestMovePv.length) {
+        contextText += `\nVariant principal: ${context.bestMovePv.slice(0, 4).join(' ')}`;
+    }
+    if (context.severity) {
+        const severityLabels = { low: 'lleu', med: 'mitjà', high: 'greu' };
+        contextText += `\nGravetat: Error ${severityLabels[context.severity] || 'desconegut'}`;
+    }
+    
     const extraStep1 = stepNumber === 1
-        ? `\nPer al pas 1:\n- La primera frase ha d'apuntar directament al següent moviment.\n- La segona frase ha d'expressar la idea general del jeroglífic.\n`
+        ? `\n\nPer al pas 1, genera dues frases màxima:\n- La primera frase ha d'apuntar a un concepte tàctic o estratègic general aplicable a aquesta posició.\n- La segona frase ha d'orientar subtilment cap a la peça o zona clau sense revelar directament la jugada.\n`
         : '';
     
-    return `Ets un entrenador d'escacs. Dona ${sentenceText} molt breu${sentenceCount === 1 ? '' : 's'} en català: màximes o principis d'escacs per ajudar a trobar la millor jugada del pas ${stepNumber} d'un jeroglífic.
+    return `Ets un entrenador d'escacs expert. Analitza aquesta situació i genera ${sentenceText} en català amb màximes o principis d'escacs per ajudar a trobar la millor jugada del pas ${stepNumber}.
+${contextText}
 
-Regles estrictes:
-- Analitzant l'error de la partida, així com el moviment correcta, genera una màxima o princip d'escacs adaptat per donar una pista per trobar el següent moviment correcte.
-- No afegeixis salutacions, títols ni explicacions.
-- No enumeris ni facis llistes.
-- No facis servir cometes ni emojis.
-- No facis una frase evident on l'usuari no hagi d'analitzar la situació.
-- Cada frase ha de ser una màxima general aplicable a situacions amb errors similars concrets dins d'una partida d'escacs.
+REGLES IMPERATIVES:
+- Cada frase ha de tenir entre 8 i 15 paraules
+- Les màximes han de ser específiques i accionables, no genèriques
+- NO facis servir frases de menys de 5 paraules
+- NO repeteixis conceptes entre frases
+- NO facis servir cometes, emojis, ni enumeracions
+- Centra't en conceptes tàctics concrets: forquilles, claus, atacs dobles, debilitats de peó, peces sobrecarregades, línies obertes, control del centre
+- Les màximes han de guiar sense revelar directament la solució
 ${extraStep1}
-Exemple pas 1:
-Busca la millor casella per a la teva peça més activa
-Ataca el punt feble de la defensa enemiga
+BONS EXEMPLES de màximes per al pas 1:
+Les peces actives sempre busquen caselles que controlin múltiples objectius simultàniament
+Identifica les peces enemigues que defensen múltiples punts i sobrecarrega-les
+Quan el rei està al centre les columnes obertes són autopistes d'atac
 
-Exemple pas 2:
-Coordina les teves peces per maximitzar la pressió`;
+BONS EXEMPLES de màximes per al pas 2:
+Després d'una tàctica guanyadora cal consolidar amb jugades naturals de desenvolupament
+Mantén la pressió sobre els punts febles abans que l'adversari pugui reagrupar-se
+
+Genera ara ${sentenceText} específica${sentenceCount === 1 ? '' : 's'} per aquesta posició:`;
 }
 
 async function requestGeminiBundleHint() {
@@ -3847,8 +3872,24 @@ async function requestGeminiBundleHint() {
     const statusEl = $('#status');
     statusEl.html('<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">🧠 Generant màxima d\'escacs...</div>');
     
+    // CANVI: Recollir context de l'error actual
+    const errorContext = {};
+    
+    // Buscar l'error als savedErrors que correspongui al FEN actual
+    const currentError = savedErrors.find(e => e.fen === currentBundleFen);
+    if (currentError) {
+        errorContext.fen = currentError.fen;
+        errorContext.bestMove = currentError.bestMove;
+        errorContext.playerMove = currentError.playerMove;
+        errorContext.severity = currentError.severity;
+        errorContext.bestMovePv = currentError.bestMovePv || [];
+    } else {
+        // Si no el trobem, usar el FEN i dades mínimes
+        errorContext.fen = currentBundleFen;
+    }
+    
     const step = bundleSequenceStep === 2 ? 2 : 1;
-    const prompt = buildGeminiBundleHintPrompt(step);
+    const prompt = buildGeminiBundleHintPrompt(step, errorContext);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
     
     try {
@@ -3858,8 +3899,10 @@ async function requestGeminiBundleHint() {
             body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 120
+                    temperature: 0.85,  // ← Incrementat de 0.7
+                    maxOutputTokens: 200,  // ← Incrementat de 120
+                    topP: 0.95,
+                    topK: 40
                 }
             })
         });
@@ -3871,11 +3914,21 @@ async function requestGeminiBundleHint() {
         
         if (!text) throw new Error('Resposta buida de Gemini');
         
-        // Formatar el missatge visualment
+        // Validar que les frases no siguin massa curtes
         const lines = text.split('\n').filter(l => l.trim());
+        const validLines = lines.filter(line => {
+            const words = line.trim().split(/\s+/).length;
+            return words >= 5;  // Mínim 5 paraules
+        });
+        
+        if (validLines.length === 0) {
+            throw new Error('Respostes massa curtes');
+        }
+        
+        // Formatar el missatge visualment
         let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
         html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
-        lines.forEach(line => {
+        validLines.forEach(line => {
             html += `<div style="font-style:italic; margin:4px 0;">"${line.trim()}"</div>`;
         });
         html += '</div>';
@@ -3884,7 +3937,7 @@ async function requestGeminiBundleHint() {
         
     } catch (err) {
         console.error(err);
-        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut generar la màxima.</div>');
+        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut generar la màxima. Torna-ho a provar.</div>');
     } finally {
         bundleGeminiHintPending = false;
         updateBundleHintButtons();
@@ -6389,7 +6442,7 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = [
             elo: userELO,
             bestMove: bestMove || null,
             playerMove: playerMove || lastHumanMoveUci || null,
-            bestMovePv: bestMovePv || []
+            bestMovePv: bestMovePv || []  // ← Assegura't que aquest està present
         });
         saveStorage(); 
         updateDisplay(); 
