@@ -2221,10 +2221,15 @@ function updateGeminiSettingsUI() {
 
 function updateBundleHintButtons() {
     const brainBtn = document.getElementById('btn-brain-hint');
-    if (!brainBtn) return;
-    const visible = blunderMode;
+    const hintBtn = document.getElementById('btn-hint');
+    if (!brainBtn || !hintBtn) return;
+    
+    const visible = blunderMode && bundleSequenceStep <= 2;
     brainBtn.style.display = visible ? 'inline-flex' : 'none';
+    hintBtn.style.display = visible ? 'inline-flex' : 'none';
+    
     brainBtn.disabled = !visible || !geminiApiKey || bundleGeminiHintPending;
+    hintBtn.disabled = !visible || !stockfish || isAnalyzingHint;
 }
 
 function saveGeminiApiKey(rawKey) {
@@ -3804,58 +3809,82 @@ function buildGeminiBundleHintPrompt(step) {
     const stepNumber = step === 2 ? 2 : 1;
     const sentenceCount = stepNumber === 1 ? 2 : 1;
     const sentenceText = sentenceCount === 1 ? '1 frase' : '2 frases';
+    
     const extraStep1 = stepNumber === 1
         ? `\nPer al pas 1:\n- La primera frase ha d'apuntar directament al següent moviment.\n- La segona frase ha d'expressar la idea general del jeroglífic.\n`
         : '';
+    
     return `Ets un entrenador d'escacs. Dona ${sentenceText} molt breu${sentenceCount === 1 ? '' : 's'} en català: màximes o principis d'escacs per ajudar a trobar la millor jugada del pas ${stepNumber} d'un jeroglífic.
 
 Regles estrictes:
-- Respon només amb les ${sentenceText}.
+- Respon només amb ${sentenceText}, una per consulta.
 - No afegeixis salutacions, títols ni explicacions.
 - No enumeris ni facis llistes.
 - No facis servir cometes ni emojis.
 - No mencionis peces concretes ni caselles.
 - Cada frase ha de ser una màxima general aplicable.
-${extraStep1}`;
+${extraStep1}
+Exemple pas 1:
+Busca la millor casella per a la teva peça més activa
+Ataca el punt feble de la defensa enemiga
+
+Exemple pas 2:
+Coordina les teves peces per maximitzar la pressió`;
 }
 
 async function requestGeminiBundleHint() {
     if (!blunderMode || !currentBundleFen) return;
     if (!geminiApiKey) {
-        alert('Configura la clau de Gemini per utilitzar aquesta pista.');
+        const statusEl = $('#status');
+        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px; line-height:1.5;">⚠️ Configura la clau de Gemini a Estadístiques → Configuració per utilitzar aquesta pista.</div>');
         return;
     }
     if (bundleGeminiHintPending) return;
+    
     bundleGeminiHintPending = true;
     updateBundleHintButtons();
-    $('#status').text('Generant màxima...');
+    
+    const statusEl = $('#status');
+    statusEl.html('<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">🧠 Generant màxima d\'escacs...</div>');
+    
     const step = bundleSequenceStep === 2 ? 2 : 1;
     const prompt = buildGeminiBundleHintPrompt(step);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+    
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [
-                    { role: 'user', parts: [{ text: prompt }] }
-                ],
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
                     temperature: 0.7,
                     maxOutputTokens: 120
                 }
             })
         });
-        if (!response.ok) {
-            throw new Error(`Gemini error ${response.status}`);
-        }
+        
+        if (!response.ok) throw new Error(`Gemini error ${response.status}`);
+        
         const data = await response.json();
         const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
+        
         if (!text) throw new Error('Resposta buida de Gemini');
-        $('#status').text(text);
+        
+        // Formatar el missatge visualment
+        const lines = text.split('\n').filter(l => l.trim());
+        let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
+        html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
+        lines.forEach(line => {
+            html += `<div style="font-style:italic; margin:4px 0;">"${line.trim()}"</div>`;
+        });
+        html += '</div>';
+        
+        statusEl.html(html);
+        
     } catch (err) {
         console.error(err);
-        $('#status').text('No s’ha pogut generar la màxima.');
+        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut generar la màxima.</div>');
     } finally {
         bundleGeminiHintPending = false;
         updateBundleHintButtons();
@@ -5469,6 +5498,18 @@ function startGame(isBundle, fen = null) {
     clearEngineMoveHighlights();
     updateStatus();
     updateBundleHintButtons();
+    
+    // Forçar actualització visual després de 100ms
+    setTimeout(() => {
+        updateBundleHintButtons();
+        if (blunderMode) {
+            const statusEl = $('#status');
+            const msg = bundleSequenceStep === 1 
+                ? 'Pas 1 de 2: Troba la millor jugada'
+                : 'Pas 2 de 2: Completa la seqüència';
+            statusEl.text(msg);
+        }
+    }, 100);
     
     if (playerColor !== game.turn()) {
         pendingEngineFirstMove = true;
