@@ -1407,13 +1407,26 @@
             display: block;
             margin: 0 auto;
         }        
-        .review-actions {
+ .review-actions {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
             margin-top: 12px;
         }
+
+        /* Historial: controls a sobre del tauler en mòbil */
+        body.device-mobile .history-detail {
+            display: flex;
+            flex-direction: column;
+        }
+        body.device-mobile .history-detail-header { order: 1; }
+        body.device-mobile #history-breakdown { order: 2; }
+        body.device-mobile .history-controls { order: 3; margin-bottom: 10px; }
+        body.device-mobile .history-board { order: 4; }
+        body.device-mobile .history-actions { order: 5; }
+        body.device-mobile .history-review { order: 6; }
+        body.device-mobile .history-progress { order: 7; }
     </style>
 </head>
 <body>

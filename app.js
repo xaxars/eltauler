@@ -3470,6 +3470,7 @@ function updateHistoryBoard() {
     updateHistoryControls();
 }
 
+// CERCA AQUESTA FUNCIÓ:
 function initHistoryBoard() {
     if (historyBoard) return;
     const boardEl = document.getElementById('history-board');
@@ -3477,6 +3478,31 @@ function initHistoryBoard() {
     historyBoard = Chessboard('history-board', {
         draggable: false,
         position: 'start',
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    });
+}
+
+// CANVIA-LA PER AQUESTA:
+function initHistoryBoard(entry) {
+    const boardEl = document.getElementById('history-board');
+    if (!boardEl) return;
+    
+    // Determinar orientació segons el color jugat
+    let orientation = 'white';
+    if (entry && entry.playerColor === 'b') {
+        orientation = 'black';
+    }
+    
+    // Si ja existeix el tauler, només canviar orientació si cal
+    if (historyBoard) {
+        historyBoard.orientation(orientation);
+        return;
+    }
+    
+    historyBoard = Chessboard('history-board', {
+        draggable: false,
+        position: 'start',
+        orientation: orientation,
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
 }
@@ -3497,7 +3523,7 @@ function getHistoryMoves(entry) {
 function loadHistoryEntry(entry) {
     if (!entry) return;
     stopHistoryPlayback();
-    initHistoryBoard();
+    initHistoryBoard(entry);
     const moves = getHistoryMoves(entry);
     historyReplay = {
         entry: entry,
