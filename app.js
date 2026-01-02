@@ -3573,7 +3573,7 @@ function updateHistoryReview(entry) {
         return;
     }
     if (!geminiApiKey) {
-        reviewContent.text('Configura la clau de Gemini per generar revisions zen.');
+        reviewContent.text('Configura la clau de Gemini per generar revisions.');
         if (generateBtn.length) generateBtn.prop('disabled', true);
         return;
     }
