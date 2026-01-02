@@ -3809,7 +3809,7 @@ function buildGeminiBundleHintPrompt(step, context = {}) {
     const stepNumber = step === 2 ? 2 : 1;
     const sentenceCount = stepNumber === 1 ? 2 : 1;
     const sentenceText = sentenceCount === 1 ? '1 frase' : '2 frases';
-    const maxChars = 350;
+    const maxChars = 600;
     
     // Construir context posicional
     let contextText = '';
