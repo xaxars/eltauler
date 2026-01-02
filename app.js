@@ -132,6 +132,7 @@ let bundleSequenceStartFen = null;
 let bundleStepStartFen = null;
 let bundleStrictPvLine = [];
 let bundleStrictPvDepth = 0;
+let bundleFixedSequence = null;
 let bundleAutoReplyPending = false;
 let bundleGeminiHintPending = false;
 const LEAGUE_QUOTES = [
@@ -2773,6 +2774,108 @@ function evaluateKingSafety(board, whiteKing, blackKing, castling) {
     return safety;
 }
 
+async function prepareBundleSequence(fen) {
+    if (!stockfish) return null;
+    
+    // 1. Analitzar posició inicial (Pas 1)
+    const step1Analysis = await analyzePositionEnriched(stockfish, fen, 15, 2);
+    
+    if (!step1Analysis.bestMove) return null;
+    
+    const playerMove1 = step1Analysis.bestMove.move;
+    const playerMove1San = uciToSan(fen, playerMove1);
+    const playerMove1Pv = step1Analysis.bestMove.pv || [];
+    const playerMove1Eval = step1Analysis.bestMove.eval || null;
+    
+    // 2. Aplicar la millor jugada del jugador
+    const tempGame1 = new Chess(fen);
+    const move1 = tempGame1.move({
+        from: playerMove1.slice(0, 2),
+        to: playerMove1.slice(2, 4),
+        promotion: playerMove1.length > 4 ? playerMove1[4] : undefined
+    });
+    
+    if (!move1) return null;
+    const afterPlayerFen = tempGame1.fen();
+    
+    // 3. Calcular millor resposta de l'oponent
+    const opponentAnalysis = await analyzePositionEnriched(stockfish, afterPlayerFen, 15, 1);
+    
+    if (!opponentAnalysis.bestMove) return null;
+    
+    const opponentMove = opponentAnalysis.bestMove.move;
+    const opponentMoveSan = uciToSan(afterPlayerFen, opponentMove);
+    const opponentMoveEval = opponentAnalysis.bestMove.eval || null;
+    
+    // 4. Aplicar resposta de l'oponent
+    const tempGame2 = new Chess(afterPlayerFen);
+    const move2 = tempGame2.move({
+        from: opponentMove.slice(0, 2),
+        to: opponentMove.slice(2, 4),
+        promotion: opponentMove.length > 4 ? opponentMove[4] : undefined
+    });
+    
+    if (!move2) return null;
+    const afterOpponentFen = tempGame2.fen();
+    
+    // 5. Calcular millor segona jugada del jugador (Pas 2)
+    const step2Analysis = await analyzePositionEnriched(stockfish, afterOpponentFen, 15, 2);
+    
+    if (!step2Analysis.bestMove) return null;
+    
+    const playerMove2 = step2Analysis.bestMove.move;
+    const playerMove2San = uciToSan(afterOpponentFen, playerMove2);
+    const playerMove2Pv = step2Analysis.bestMove.pv || [];
+    const playerMove2Eval = step2Analysis.bestMove.eval || null;
+    
+    // 6. Analitzar context posicional de cada pas
+    const positionStep1 = parseFenPosition(fen);
+    const positionStep2 = parseFenPosition(afterOpponentFen);
+    const threatsStep1 = analyzePvThreats(fen, playerMove1Pv);
+    const threatsStep2 = analyzePvThreats(afterOpponentFen, playerMove2Pv);
+    
+    // 7. Retornar seqüència completa i fixa
+    return {
+        initialFen: fen,
+        
+        // Pas 1
+        step1: {
+            fen: fen,
+            playerMove: playerMove1,
+            playerMoveSan: playerMove1San,
+            playerMovePv: playerMove1Pv,
+            evalBefore: playerMove1Eval,
+            alternatives: step1Analysis.alternatives || [],
+            position: positionStep1,
+            threats: threatsStep1
+        },
+        
+        // Resposta oponent
+        opponentMove: {
+            fen: afterPlayerFen,
+            move: opponentMove,
+            moveSan: opponentMoveSan,
+            eval: opponentMoveEval
+        },
+        
+        // Pas 2
+        step2: {
+            fen: afterOpponentFen,
+            playerMove: playerMove2,
+            playerMoveSan: playerMove2San,
+            playerMovePv: playerMove2Pv,
+            evalBefore: playerMove2Eval,
+            alternatives: step2Analysis.alternatives || [],
+            position: positionStep2,
+            threats: threatsStep2
+        },
+        
+        // Seqüència completa
+        fullSequence: [playerMove1, opponentMove, playerMove2],
+        fullSequenceSan: [playerMove1San, opponentMoveSan, playerMove2San]
+    };
+}
+
 function analyzePvThreats(fen, pv) {
     if (!pv || pv.length === 0) {
         return { threats: [], themes: [], immediateThreats: [] };
@@ -3858,6 +3961,49 @@ Mantén la pressió sobre els punts febles abans que l'adversari pugui reagrupar
 Genera ara ${sentenceText} específica${sentenceCount === 1 ? '' : 's'} per aquesta posició:`;
 }
 
+function buildBundleGeminiPromptWithFixedSequence(step) {
+    if (!bundleFixedSequence) return null;
+    
+    const stepData = step === 1 ? bundleFixedSequence.step1 : bundleFixedSequence.step2;
+    const stepLabel = step === 1 ? "primer" : "segon";
+    
+    return `Ets un entrenador d'escacs expert. Genera 2 frases màxima en català per ajudar a trobar la millor jugada del ${stepLabel} pas d'aquesta seqüència tàctica.
+
+SEQÜÈNCIA COMPLETA (no revelar):
+1. Jugador: ${bundleFixedSequence.fullSequenceSan[0]}
+2. Oponent: ${bundleFixedSequence.fullSequenceSan[1]}
+3. Jugador: ${bundleFixedSequence.fullSequenceSan[2]}
+
+CONTEXT DEL PAS ${step}:
+Posició (FEN): ${stepData.fen}
+Millor jugada: ${stepData.playerMoveSan}
+Variant principal: ${stepData.playerMovePv.slice(0, 4).join(' ')}
+Avaluació: ${stepData.evalBefore} centipawns
+
+CONTEXT POSICIONAL:
+- Balanç material: ${stepData.position.material.balance}
+- Temes: ${stepData.threats.themes.join(', ') || 'Cap'}
+- Amenaces: ${stepData.threats.threats.map(t => t.description || t.type).join('; ') || 'Cap'}
+
+${step === 1 ? `
+PER AL PAS 1, genera dues frases:
+- Primera frase: Apunta a un concepte tàctic general aplicable
+- Segona frase: Orienta subtilment cap a la peça o zona clau
+` : `
+PER AL PAS 2, genera dues frases:
+- Primera frase: Com consolidar l'avantatge obtingut
+- Segona frase: Principi per mantenir la pressió
+`}
+
+REGLES:
+- Cada frase mínim 20, màxim 250 caràcters
+- Específiques i accionables, no genèriques
+- NO revelar directament la solució
+- Centrar-se en conceptes tàctics concrets
+
+Genera ara 2 frases específiques:`;
+}
+
 async function requestGeminiBundleHint() {
     if (!blunderMode || !currentBundleFen) return;
     if (!geminiApiKey) {
@@ -3873,24 +4019,33 @@ async function requestGeminiBundleHint() {
     const statusEl = $('#status');
     statusEl.html('<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">🧠 Generant màxima d\'escacs...</div>');
     
-    // CANVI: Recollir context de l'error actual
-    const errorContext = {};
-    
-    // Buscar l'error als savedErrors que correspongui al FEN actual
-    const currentError = savedErrors.find(e => e.fen === currentBundleFen);
-    if (currentError) {
-        errorContext.fen = currentError.fen;
-        errorContext.bestMove = currentError.bestMove;
-        errorContext.playerMove = currentError.playerMove;
-        errorContext.severity = currentError.severity;
-        errorContext.bestMovePv = currentError.bestMovePv || [];
+    // ✅ USAR SEQÜÈNCIA FIXA SI EXISTEIX
+    let prompt;
+    if (bundleFixedSequence) {
+        prompt = buildBundleGeminiPromptWithFixedSequence(bundleSequenceStep);
     } else {
-        // Si no el trobem, usar el FEN i dades mínimes
-        errorContext.fen = currentBundleFen;
+        // Fallback al mètode antic
+        const errorContext = {};
+        const currentError = savedErrors.find(e => e.fen === currentBundleFen);
+        if (currentError) {
+            errorContext.fen = currentError.fen;
+            errorContext.bestMove = currentError.bestMove;
+            errorContext.playerMove = currentError.playerMove;
+            errorContext.severity = currentError.severity;
+            errorContext.bestMovePv = currentError.bestMovePv || [];
+        } else {
+            errorContext.fen = currentBundleFen;
+        }
+        const step = bundleSequenceStep === 2 ? 2 : 1;
+        prompt = buildGeminiBundleHintPrompt(step, errorContext);
     }
     
-    const step = bundleSequenceStep === 2 ? 2 : 1;
-    const prompt = buildGeminiBundleHintPrompt(step, errorContext);
+    if (!prompt) {
+        bundleGeminiHintPending = false;
+        updateBundleHintButtons();
+        return;
+    }
+    
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
     
     try {
@@ -3900,8 +4055,8 @@ async function requestGeminiBundleHint() {
             body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.85,  // ← Incrementat de 0.7
-                    maxOutputTokens: 2000,  // ← Incrementat de 120
+                    temperature: 0.85,
+                    maxOutputTokens: 2000,
                     topP: 0.95,
                     topK: 40
                 }
@@ -3915,22 +4070,14 @@ async function requestGeminiBundleHint() {
         }
 
         const data = await response.json();
-        console.log('[Gemini] Resposta completa:', JSON.stringify(data, null, 2));
-        console.log('[Gemini] Finish reason:', data?.candidates?.[0]?.finishReason);
-        console.log('[Gemini] Safety ratings:', data?.candidates?.[0]?.safetyRatings);
-
         const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
-
-        console.log('[Gemini] Text extret:', text);
-        console.log('[Gemini] Longitud text:', text?.length);
 
         if (!text) throw new Error('Resposta buida de Gemini');
         
-        // Validar que les frases no siguin massa curtes
         const lines = text.split('\n').filter(l => l.trim());
         const validLines = lines.filter(line => {
             const words = line.trim().split(/\s+/).length;
-            return words >= 5;  // Mínim 5 paraules
+            return words >= 5;
         });
         
         if (validLines.length === 0) {
@@ -3951,7 +4098,6 @@ async function requestGeminiBundleHint() {
             remainingChars -= trimmedLine.length;
         }
 
-        // Formatar el missatge visualment
         let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
         html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
         trimmedLines.forEach(line => {
@@ -5441,7 +5587,7 @@ function promptMatchErrorNext() {
     }
 }
 
-function startGame(isBundle, fen = null) {
+async function startGame(isBundle, fen = null) {  // ← AFEGIR async
     currentReview = [];
     lastReviewSnapshot = null;
     setResultIndicator(null);
@@ -5467,9 +5613,26 @@ function startGame(isBundle, fen = null) {
     $('#calibration-result-screen').hide();
     $('#game-screen').show();
     
-    blunderMode = isBundle; 
+blunderMode = isBundle; 
     isCalibrationGame = isCalibrationActive() && !isBundle;
     currentBundleFen = fen;
+    
+    // ✅ CALCULAR SEQÜÈNCIA FIXA PER BUNDLES
+    bundleFixedSequence = null;
+    if (isBundle && fen) {
+        $('#status').text("Preparant exercici...").css('color', 'var(--accent-cream)');
+        bundleFixedSequence = await prepareBundleSequence(fen);
+        
+        if (!bundleFixedSequence) {
+            alert("No s'ha pogut preparar l'exercici. Es retornarà al menú.");
+            returnToMainMenuImmediate();
+            return;
+        }
+        
+        // Guardar seqüència per validació
+        bundleStrictPvLine = bundleFixedSequence.fullSequence;
+    }
+    
     lastHumanMoveUci = null;
     isBundleStrictAnalysis = false;
     bundleBestMove = null;
@@ -6090,6 +6253,65 @@ function cacheBundleAnswer(fen, mode, bestMove, pvMoves, pvLine = null, pvLines 
 
 function evaluateBundleAttempt(bundleData) {
     const played = lastHumanMoveUci || '';
+    
+    // ✅ SI HI HA SEQÜÈNCIA FIXA, USAR-LA
+    if (bundleFixedSequence) {
+        const step = bundleSequenceStep;
+        
+        // Validar segons el pas actual
+        const expectedMove = step === 1 
+            ? bundleFixedSequence.step1.playerMove 
+            : bundleFixedSequence.step2.playerMove;
+        
+        const alternatives = step === 1
+            ? bundleFixedSequence.step1.alternatives
+            : bundleFixedSequence.step2.alternatives;
+        
+        // Validar jugada
+        let ok = played === expectedMove;
+        
+        // Si mode top2, acceptar també alternatives
+        if (!ok && bundleAcceptMode === 'top2' && alternatives.length > 0) {
+            ok = alternatives.some(alt => alt.move === played);
+        }
+        
+        if (ok) {
+            if (pendingMoveEvaluation) { 
+                goodMoves++; 
+                pendingMoveEvaluation = false; 
+                updatePrecisionDisplay(); 
+            }
+            
+            if (bundleSequenceStep === 1) {
+                // ✅ USAR RESPOSTA FIXA DE L'OPONENT
+                bundleSequenceStep = 2;
+                const replyMove = bundleFixedSequence.opponentMove.move;
+                applyBundleAutoReply(replyMove);
+                bundleStepStartFen = game.fen();
+                
+                $('#status').text('Pas 2 de 2: Completa la seqüència');
+                return;
+            }
+            
+            // Pas 2 completat!
+            handleBundleSuccess();
+        } else {
+            // Error - resetar al pas actual
+            if (pendingMoveEvaluation) {
+                pendingMoveEvaluation = false;
+                totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
+                updatePrecisionDisplay();
+            }
+            
+            if (bundleSequenceStep === 1) {
+                bundleStepStartFen = bundleSequenceStartFen;
+            }
+            showBundleTryAgainModal();
+        }
+        return;
+    }
+    
+    // ❌ FALLBACK: Mètode antic si no hi ha seqüència fixa
     const playedBase = played.slice(0, 4);
     let ok = false;
     if (bundleData.mode === 'top1') {
@@ -6100,6 +6322,7 @@ function evaluateBundleAttempt(bundleData) {
         const accepted = [bundleData.pvMoves?.['1'], bundleData.pvMoves?.['2']].filter(Boolean);
         ok = accepted.length > 0 ? accepted.includes(played) : false;
     }
+    
     if (ok) {
         if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
         if (bundleSequenceStep === 1) {
