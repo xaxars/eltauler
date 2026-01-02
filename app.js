@@ -3563,7 +3563,7 @@ function updateHistoryReview(entry) {
         return;
     }
     if (review && review.status === 'pending') {
-        reviewContent.text('Generant revisió zen amb Gemini...');
+        reviewContent.text('Generant revisió amb Gemini...');
         if (generateBtn.length) generateBtn.prop('disabled', true);
         return;
     }
