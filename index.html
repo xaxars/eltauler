@@ -959,6 +959,24 @@
             line-height: 1.6;
         }
         body.epaper-mode .history-review-content { color: #444; }
+        .gemini-move-link {
+            color: var(--accent-gold);
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        .gemini-move-link:hover {
+        color: var(--accent-purple);
+        text-decoration: none;
+        }
+        body.epaper-mode .gemini-move-link {
+        color: #333;
+        text-decoration: underline;
+        }
+        body.epaper-mode .gemini-move-link:hover {
+        color: #000;
+        }
         #history-board {
             width: 100%;
             border-radius: 12px;

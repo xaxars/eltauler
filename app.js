@@ -3559,6 +3559,7 @@ function updateHistoryReview(entry) {
     const review = entry.geminiReview || null;
     if (review && review.text) {
         reviewContent.html(formatGeminiReviewText(review.text));
+        bindGeminiMoveLinks(reviewContent);
         if (generateBtn.length) generateBtn.prop('disabled', true);
         return;
     }
@@ -3592,9 +3593,137 @@ function escapeHtml(text) {
 
 function formatGeminiReviewText(text) {
     const safe = escapeHtml(text || '');
-    return safe
+    
+    // Primer, formatem les cometes per a màximes
+    let formatted = safe
         .replace(/&quot;([\s\S]*?)&quot;/g, '<em>"$1"</em>')
-        .replace(/“([\s\S]*?)”/g, '<em>“$1”</em>');
+        .replace(/"([\s\S]*?)"/g, '<em>"$1"</em>');
+    
+    // Patrons per capturar referències a jugades (més flexibles)
+    const movePatterns = [
+        // "jugada 10 (Nxe5)" - format principal
+        /jugada\s+(\d+)\s*\(([^)]+)\)/gi,
+        // "a la jugada 10 (Nxe5)"
+        /a\s+la\s+jugada\s+(\d+)\s*\(([^)]+)\)/gi,
+        // "jugada número 10 (Nxe5)"
+        /jugada\s+n[úu]mero\s+(\d+)\s*\(([^)]+)\)/gi,
+        // "moviment 10 (Nxe5)"
+        /moviment\s+(\d+)\s*\(([^)]+)\)/gi,
+    ];
+    
+    // Apliquem cada patró
+    movePatterns.forEach(pattern => {
+        formatted = formatted.replace(pattern, (match, moveNumber, san) => {
+            const cleanSan = san.trim();
+            return `<a href="#" class="gemini-move-link" data-move-number="${moveNumber}" data-san="${cleanSan}">${match}</a>`;
+        });
+    });
+    
+    return formatted;
+}
+
+function bindGeminiMoveLinks(container) {
+    if (!container || !container.length) return;
+    container.find('.gemini-move-link').off('click').on('click', function(event) {
+        event.preventDefault();
+        const moveNumber = Number($(this).data('move-number'));
+        const san = String($(this).data('san') || '').trim();
+        jumpToHistoryMove(moveNumber, san);
+    });
+}
+
+function jumpToHistoryMove(moveNumber, san) {
+    if (!historyReplay || !historyReplay.entry || !historyReplay.moves) return;
+    stopHistoryPlayback();
+    
+    const targetIndex = findHistoryMoveIndex(moveNumber, san);
+    if (targetIndex === null || targetIndex < 0) {
+        console.warn(`No s'ha trobat la jugada ${moveNumber} (${san})`);
+        return;
+    }
+    
+    // Resetegem el joc i avancem fins a la posició ABANS de la jugada errònia
+    historyReplay.game = new Chess();
+    const stopAt = Math.max(0, targetIndex - 1); // Mostrem la posició just abans
+    
+    for (let i = 0; i < stopAt; i++) {
+        const result = historyReplay.game.move(historyReplay.moves[i], { sloppy: true });
+        if (!result) {
+            console.warn(`Error aplicant jugada ${i}: ${historyReplay.moves[i]}`);
+            break;
+        }
+    }
+    
+    historyReplay.moveIndex = stopAt;
+    updateHistoryBoard();
+    
+    // Highlight visual de la casella destí de la jugada errònia
+    if (targetIndex > 0 && historyReplay.moves[targetIndex - 1]) {
+        const moveStr = historyReplay.moves[targetIndex - 1];
+        highlightReviewedMove(moveStr);
+    }
+}
+
+function highlightReviewedMove(san) {
+    // Opcionalment, ressaltar la jugada al tauler
+    $('#history-board .square-55d63').removeClass('reviewed-move');
+    // Aquí podries afegir lògica per ressaltar caselles específiques
+}
+
+function findHistoryMoveIndex(moveNumber, san) {
+    if (!historyReplay || !Array.isArray(historyReplay.moves)) return null;
+    const moves = historyReplay.moves;
+    const normalizedSan = (san || '').trim().replace(/[+#!?]/g, ''); // Eliminar anotacions
+    
+    // Primer intent: buscar per número de jugada exacte
+    if (moveNumber) {
+        // La jugada X correspon a l'índex (X-1)*2 per blanques o (X-1)*2+1 per negres
+        // Però necessitem saber el color - intentem ambdós
+        const whiteIndex = (moveNumber - 1) * 2;
+        const blackIndex = whiteIndex + 1;
+        
+        // Comprovem si la SAN coincideix
+        if (whiteIndex < moves.length) {
+            const whiteSan = moves[whiteIndex].replace(/[+#!?]/g, '');
+            if (!normalizedSan || whiteSan === normalizedSan) {
+                return whiteIndex + 1; // +1 perquè volem mostrar DESPRÉS de jugar
+            }
+        }
+        if (blackIndex < moves.length) {
+            const blackSan = moves[blackIndex].replace(/[+#!?]/g, '');
+            if (!normalizedSan || blackSan === normalizedSan) {
+                return blackIndex + 1;
+            }
+        }
+    }
+    
+    // Segon intent: buscar per SAN si no hem trobat per número
+    if (normalizedSan) {
+        for (let i = 0; i < moves.length; i++) {
+            const moveSan = moves[i].replace(/[+#!?]/g, '');
+            if (moveSan === normalizedSan) {
+                // Si tenim moveNumber, comprovem que estigui a prop
+                if (moveNumber) {
+                    const fullMove = Math.ceil((i + 1) / 2);
+                    if (Math.abs(fullMove - moveNumber) <= 1) {
+                        return i + 1;
+                    }
+                } else {
+                    return i + 1;
+                }
+            }
+        }
+    }
+    
+    // Tercer intent: només per número de jugada (blanques per defecte)
+    if (moveNumber) {
+        const defaultIndex = (moveNumber - 1) * 2;
+        if (defaultIndex < moves.length) {
+            return defaultIndex + 1;
+        }
+    }
+    
+    return null;
 }
 
 function getSevereErrors(entries) {
@@ -3637,48 +3766,61 @@ function buildGeminiReviewPrompt(entry, severeErrors) {
         const played = err.playerMoveSan || err.playerMove || '?';
         const best = err.bestMoveSan || err.bestMove || '?';
         const swing = err.swing || 0;
-        const fen = err.fen || '';
         const pvLine = (err.bestMovePvSan || err.bestMovePv || []).slice(0, 4).join(' ');
         
-        return `Error ${idx + 1}: Jugada ${moveNum}, vas jugar ${played}, calia ${best}. Pèrdua: ${swing}cp. Continuació: ${pvLine || '—'}. FEN: ${fen}`;
-    }).join('\n');
+        return `Error ${idx + 1}:
+  - Número de jugada: ${moveNum}
+  - Jugada feta: ${played}
+  - Millor jugada: ${best}
+  - Pèrdua: ${swing} centipawns
+  - Continuació correcta: ${pvLine || '—'}`;
+    }).join('\n\n');
 
     const totalMoves = moves.length;
     
     return `Ets un mestre d'escacs amable que ensenya amb màximes memorables.
 
-DADES
-Resultat: ${entry.result || '—'} | Precisió: ${typeof entry.precision === 'number' ? `${entry.precision}%` : '—'} | Jugades: ${totalMoves}
-Bones: ${(summary.excel || 0) + (summary.good || 0)} | Imprecisions: ${summary.inaccuracy || 0} | Errors greus: ${(summary.mistake || 0) + (summary.blunder || 0)}
+DADES DE LA PARTIDA
+- Resultat: ${entry.result || '—'}
+- Precisió: ${typeof entry.precision === 'number' ? `${entry.precision}%` : '—'}
+- Total jugades: ${totalMoves}
+- Jugades bones: ${(summary.excel || 0) + (summary.good || 0)}
+- Imprecisions: ${summary.inaccuracy || 0}
+- Errors greus: ${(summary.mistake || 0) + (summary.blunder || 0)}
 
-ERRORS CONCRETS (menciona les jugades explícitament!)
-${errorsDetail || 'Cap error greu.'}
+ERRORS CONCRETS A ANALITZAR
+${errorsDetail || 'Cap error greu detectat.'}
+
+FORMAT OBLIGATORI PER REFERENCIAR JUGADES
+Quan mensionis una jugada específica, SEMPRE utilitza exactament aquest format:
+"jugada X (SAN)" - on X és el número i SAN la notació algebraica.
+Exemples correctes:
+- "A la jugada 12 (Nxe5), vas perdre material..."
+- "L'error a la jugada 8 (Qd3) va ser decisiu..."
+- "Calia jugar diferent a la jugada 15 (Bxf7+)..."
 
 INSTRUCCIONS
-1. Comença amb un TÍTOL que sigui la màxima principal de la partida entre cometes dobles (per exemple: "Les peces han de treballar juntes")
-2. Redacta un paràgraf d'anàlisi general que resumeixi el rendiment i la precisió, evitant felicitacions personals o un to excessivament fraternalista
-3. Per a cada error, utilitza l'estructura "Quan vas jugar [jugada] a la jugada [número]..." i acompanya-ho sempre d'una descripció clara de l'acció (per exemple: "en capturar el peó amb la reina" o "en retrocedir l'alfil") perquè s'entengui el moviment sense dependre del nom de la casella. Cada explicació d'error ha d'incloure una màxima universal entre cometes
-4. Finalitza amb un paràgraf de conclusió centrat en el principi clau per millorar en el futur
+1. Comença amb un TÍTOL: una màxima memorable entre cometes dobles
+2. Paràgraf d'anàlisi general del rendiment (sense felicitacions excessives)
+3. Per CADA error, explica:
+   - Què va passar a la jugada X (SAN) - descriu l'acció mecànica
+   - Per què era un error
+   - Quina era la idea correcta
+   - Una màxima universal entre cometes
+4. Paràgraf de conclusió amb el principi clau per millorar
 
 REGLES
-- Màxim 350 paraules
-- Prosa natural organitzada exclusivament en paràgrafs. No utilitzis llistes, numeracions ni asteriscs
-- Descriu la jugada identificant exclusivament la peça i l'acció mecànica realitzada.
-- Totes les lliçons estratègiques han d'anar entre cometes dobles
-- Manté un to objectiu, analític i professional, evitant un llenguatge massa familiar o emotiu
-- Crea Màximes noves coherents amb la partida i els principis dels escacs
+- Màxim 400 paraules
+- Prosa natural en paràgrafs (sense llistes ni numeracions)
+- Descriu cada jugada identificant la peça i l'acció (ex: "en capturar el cavall amb l'alfil")
+- Les màximes sempre entre cometes dobles
+- To objectiu i professional
 
-MÀXIMES VÀLIDES 
+EXEMPLES DE MÀXIMES
 "Desenvolupa les peces abans d'atacar"
 "El rei al centre és un rei en perill"
-"Controla el centre per controlar la partida"
-"Les torres necessiten columnes obertes"
-"Un cavall a la vora té menys força"
 "Abans de moure, mira què ataca el rival"
-"Cada jugada ha de tenir un propòsit"
-"Les peces han de treballar juntes"
-"No canviïs peces sense motiu quan vas guanyant"
-"Peó passat, peó que corre"`;
+"Les peces han de treballar juntes"`;
 }
 
 async function requestGeminiReview(entry, severeErrors) {
