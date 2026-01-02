@@ -3908,11 +3908,22 @@ async function requestGeminiBundleHint() {
             })
         });
         
-        if (!response.ok) throw new Error(`Gemini error ${response.status}`);
-        
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error('[Gemini] Error response:', response.status, errorBody);
+            throw new Error(`Gemini error ${response.status}: ${errorBody}`);
+        }
+
         const data = await response.json();
+        console.log('[Gemini] Resposta completa:', JSON.stringify(data, null, 2));
+        console.log('[Gemini] Finish reason:', data?.candidates?.[0]?.finishReason);
+        console.log('[Gemini] Safety ratings:', data?.candidates?.[0]?.safetyRatings);
+
         const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
-        
+
+        console.log('[Gemini] Text extret:', text);
+        console.log('[Gemini] Longitud text:', text?.length);
+
         if (!text) throw new Error('Resposta buida de Gemini');
         
         // Validar que les frases no siguin massa curtes
