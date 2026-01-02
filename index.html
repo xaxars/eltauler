@@ -909,7 +909,11 @@
         body.device-desktop .history-review {
             grid-column: 1;
             grid-row: 2 / span 4;
-            align-self: start;
+            align-self: stretch;
+            justify-self: stretch;
+            height: 100%;
+            margin-top: 0;
+            max-height: none;
         }
         body.device-desktop .history-board {
             grid-column: 2;
@@ -932,6 +936,26 @@
             max-width: 360px;
             margin: 10px auto 12px;
         }
+        .history-board-footer {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            word-break: break-word;
+        }
+        .history-fen-info {
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+            word-break: break-all;
+        }
+        .history-fen-info.fen-quality-excel { color: var(--accent-green); }
+        .history-fen-info.fen-quality-good { color: var(--accent-gold); }
+        .history-fen-info.fen-quality-inaccuracy { color: var(--severity-low); }
+        .history-fen-info.fen-quality-mistake { color: var(--severity-med); }
+        .history-fen-info.fen-quality-blunder { color: var(--severity-high); }
         .history-review {
             background: rgba(0,0,0,0.18);
             border-radius: 10px;
@@ -959,6 +983,13 @@
             line-height: 1.6;
         }
         body.epaper-mode .history-review-content { color: #444; }
+        body.epaper-mode .history-fen-info.fen-quality-excel,
+        body.epaper-mode .history-fen-info.fen-quality-good,
+        body.epaper-mode .history-fen-info.fen-quality-inaccuracy,
+        body.epaper-mode .history-fen-info.fen-quality-mistake,
+        body.epaper-mode .history-fen-info.fen-quality-blunder {
+            color: #222;
+        }
         #history-board {
             width: 100%;
             border-radius: 12px;
@@ -1626,6 +1657,10 @@
                         <div class="review-legend" id="history-breakdown"></div>
                         <div class="history-board">
                             <div id="history-board"></div>
+                            <div class="history-board-footer">
+                                <span class="history-move-info" id="history-move-info">Moviment —</span>
+                                <span class="history-fen-info" id="history-fen-info">FEN: —</span>
+                            </div>
                         </div>
                         <div class="history-controls">
                             <button class="btn btn-secondary" id="history-prev">⏮️ Endarrere</button>

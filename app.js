@@ -3462,12 +3462,56 @@ function updateHistoryProgress() {
     progress.text(`${historyReplay.moveIndex}/${historyReplay.moves.length}`);
 }
 
+function getHistoryMoveQuality(entry, moveIndex) {
+    if (!entry || !Array.isArray(entry.review) || !entry.review.length) return null;
+    if (!moveIndex) return null;
+    const player = entry.playerColor || 'w';
+    const isPlayerMove = (player === 'w' && moveIndex % 2 === 1) || (player === 'b' && moveIndex % 2 === 0);
+    if (!isPlayerMove) return null;
+    const moveNumber = Math.ceil(moveIndex / 2);
+    const match = entry.review.find(item => item.moveNumber === moveNumber);
+    return match ? match.quality : null;
+}
+
+function updateHistoryMoveInfo() {
+    const moveEl = $('#history-move-info');
+    const fenEl = $('#history-fen-info');
+    if (!moveEl.length || !fenEl.length) return;
+
+    const qualityClasses = [
+        'fen-quality-excel',
+        'fen-quality-good',
+        'fen-quality-inaccuracy',
+        'fen-quality-mistake',
+        'fen-quality-blunder'
+    ];
+
+    if (!historyReplay || !historyReplay.game || !historyReplay.entry) {
+        moveEl.text('Moviment —');
+        fenEl.text('FEN: —');
+        fenEl.removeClass(qualityClasses.join(' '));
+        return;
+    }
+
+    const fen = historyReplay.game.fen();
+    const fullmove = fen ? fen.split(' ')[5] : null;
+    moveEl.text(`Moviment ${fullmove || '—'}`);
+    fenEl.text(`FEN: ${fen || '—'}`);
+    fenEl.removeClass(qualityClasses.join(' '));
+
+    const quality = getHistoryMoveQuality(historyReplay.entry, historyReplay.moveIndex);
+    if (quality) {
+        fenEl.addClass(`fen-quality-${quality}`);
+    }
+}
+
 function updateHistoryBoard() {
     if (!historyBoard || !historyReplay || !historyReplay.game) return;
     historyBoard.position(historyReplay.game.fen(), false);
     if (typeof historyBoard.resize === 'function') historyBoard.resize();
     updateHistoryProgress();
     updateHistoryControls();
+    updateHistoryMoveInfo();
 }
 
 function initHistoryBoard() {
@@ -3525,6 +3569,7 @@ function updateHistoryDetails(entry) {
         if (reviewContent.length) reviewContent.text('—');
         updateHistoryProgress();
         updateHistoryControls();
+        updateHistoryMoveInfo();
         return;
     }
 
