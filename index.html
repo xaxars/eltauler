@@ -819,8 +819,78 @@
         
         .controls { background: var(--bg-card); padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .status-message { color: var(--text-primary); font-size: 0.95rem; margin-bottom: 12px; text-align: center; min-height: 24px; }
-        .game-buttons { display: flex; gap: 8px; }
-        .game-buttons .btn { flex: 1; padding: 12px 10px; font-size: 0.85rem; }
+        /* Controls de joc - Layout responsive */
+        .game-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        body.device-desktop .game-buttons {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        body.device-tablet .game-buttons {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 9px;
+        }
+
+        .game-buttons .btn {
+            flex: none;
+            padding: 12px 10px;
+            font-size: 0.85rem;
+        }
+
+        body.device-desktop .game-buttons .btn {
+            padding: 14px 12px;
+            font-size: 0.9rem;
+        }
+
+        /* Botó del cervell - millorat */
+        .btn-brain-hint {
+            background: linear-gradient(135deg, #5e35b1, #4527a0);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(94, 53, 177, 0.4);
+            border: 1px solid rgba(255,255,255,0.2);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-brain-hint:hover:not(:disabled) {
+            background: linear-gradient(135deg, #6a3fc7, #5230b8);
+            box-shadow: 0 6px 16px rgba(94, 53, 177, 0.5);
+        }
+
+        .btn-brain-hint img {
+            width: 20px;
+            height: 20px;
+            filter: brightness(1.2) drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+
+        body.epaper-mode .btn-brain-hint img {
+            filter: grayscale(100%) brightness(0.3);
+        }
+
+        /* Status message - millorat per mostrar màximes */
+        .status-message {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+            text-align: center;
+            min-height: 24px;
+            line-height: 1.5;
+        }
+
+        body.device-mobile .status-message {
+            font-size: 0.88rem;
+        }
+
+        body.epaper-mode .status-message {
+            filter: none;
+        }
 
         /* STATS SCREEN */
         #stats-screen { text-align: left; }
