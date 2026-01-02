@@ -3809,6 +3809,7 @@ function buildGeminiBundleHintPrompt(step, context = {}) {
     const stepNumber = step === 2 ? 2 : 1;
     const sentenceCount = stepNumber === 1 ? 2 : 1;
     const sentenceText = sentenceCount === 1 ? '1 frase' : '2 frases';
+    const maxChars = 350;
     
     // Construir context posicional
     let contextText = '';
@@ -3837,7 +3838,7 @@ function buildGeminiBundleHintPrompt(step, context = {}) {
 ${contextText}
 
 REGLES IMPERATIVES:
-- Cada frase ha de tenir entre 8 i 15 paraules
+- Cada frase ha de tenir mínim 20 i 250 màxim caràcters 
 - Les màximes han de ser específiques i accionables, no genèriques
 - NO facis servir frases de menys de 5 paraules
 - NO repeteixis conceptes entre frases
@@ -3924,11 +3925,25 @@ async function requestGeminiBundleHint() {
         if (validLines.length === 0) {
             throw new Error('Respostes massa curtes');
         }
-        
+              
+        const MAX_GEMINI_HINT_CHARS = 350;
+        let remainingChars = MAX_GEMINI_HINT_CHARS;
+        const trimmedLines = [];
+        for (const line of validLines) {
+            if (remainingChars <= 0) break;
+            let trimmedLine = line.trim();
+            if (trimmedLine.length > remainingChars) {
+                const sliceLength = Math.max(remainingChars - 1, 0);
+                trimmedLine = `${trimmedLine.slice(0, sliceLength).trim()}…`.trim();
+            }
+            trimmedLines.push(trimmedLine);
+            remainingChars -= trimmedLine.length;
+        }
+
         // Formatar el missatge visualment
         let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
         html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
-        validLines.forEach(line => {
+        trimmedLines.forEach(line => {
             html += `<div style="font-style:italic; margin:4px 0;">"${line.trim()}"</div>`;
         });
         html += '</div>';
