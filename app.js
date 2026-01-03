@@ -17,6 +17,9 @@ let currentReview = [];
 let reviewHistory = [];
 let reviewChart = null;
 let currentGameErrors = [];
+let guidedPracticeMode = false;
+let guidedPracticeColor = null;
+let guidedPracticeReview = [];
 let matchErrorQueue = [];
 let currentMatchError = null;
 let isMatchErrorReviewSession = false;
@@ -5778,9 +5781,14 @@ blunderMode = isBundle;
         playerColor = game.turn();
         boardOrientation = (playerColor === 'w') ? 'white' : 'black';
     } else {
-        const isWhite = Math.random() < 0.5;
-        playerColor = isWhite ? 'w' : 'b';
-        boardOrientation = isWhite ? 'white' : 'black';
+        if (guidedPracticeMode && guidedPracticeColor) {
+            playerColor = guidedPracticeColor === 'white' ? 'w' : 'b';
+            boardOrientation = guidedPracticeColor;
+        } else {
+            const isWhite = Math.random() < 0.5;
+            playerColor = isWhite ? 'w' : 'b';
+            boardOrientation = isWhite ? 'white' : 'black';
+        }
     }
     
     if (board) board.destroy();
@@ -5834,11 +5842,16 @@ blunderMode = isBundle;
         $('#engine-elo').text(label);
         $('#game-mode-title').text(`🏆 Lliga · Jornada ${leagueActiveMatch.round}/9`);
     } else {
-        currentGameMode = 'free';
+        currentGameMode = guidedPracticeMode ? 'guided' : 'free';
         currentOpponent = null;
-        updateAdaptiveEngineEloLabel();
-        $('#game-mode-title').text('♟ Nova partida');
-        if (engineReady) applyEngineEloStrength(currentElo);
+        if (guidedPracticeMode) {
+            $('#engine-elo').text('Stockfish');
+            $('#game-mode-title').text('🎓 Pràctica guiada');
+        } else {
+            updateAdaptiveEngineEloLabel();
+            $('#game-mode-title').text('♟ Nova partida');
+            if (engineReady) applyEngineEloStrength(currentElo);
+        }
     }
         if (!isCalibrationGame) {
         currentCalibrationOpponentElo = null;
@@ -6240,6 +6253,19 @@ function handleEngineMessage(rawMsg) {
                 evalAfter: pendingEvalAfter
             });
             resolvePendingMoveEvaluation(moveQuality);
+
+            const guidedPracticeComplete = guidedPracticeMode && currentReview.length >= 10;
+            if (guidedPracticeComplete) {
+                pendingBestMove = null;
+                pendingBestMovePv = [];
+                pendingAnalysisDepth = null;
+                pendingAlternatives = [];
+                pendingEvalBefore = null;
+                pendingEvalAfter = null;
+                pendingAnalysisFen = null;
+                handleGameOver();
+                return;
+            }
             
             if (swing > 250 && !blunderMode) {
                 let severity = 'low';
@@ -6829,6 +6855,10 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = [
 }
 
 function handleGameOver(manualResign = false) {
+    if (guidedPracticeMode) {
+        finishGuidedPractice();
+        return;
+    }
     pendingMoveEvaluation = false;
     let msg = ""; let change = 0; let playerWon = false; let resultScore = 0.5;
     const wasLeagueMatch = (currentGameMode === 'league') && !!leagueActiveMatch;
@@ -7762,6 +7792,227 @@ function getOpeningPositions(move, color) {
     return positions;
 }
 
+// ===== PRÀCTICA GUIADA D'OBERTURES =====
+function startGuidedPractice(color) {
+    guidedPracticeMode = true;
+    guidedPracticeColor = color;
+    guidedPracticeReview = [];
+
+    $('#guided-practice-results-screen').hide();
+    $('#lesson-screen').hide();
+
+    isRandomBundleSession = false;
+    isMatchErrorReviewSession = false;
+    matchErrorQueue = [];
+    currentMatchError = null;
+    currentBundleSource = 'guided';
+    currentBundleSeverity = null;
+    currentGameMode = 'guided';
+
+    startGame(false);
+}
+
+function finishGuidedPractice() {
+    const movesPlayed = Math.min(currentReview.length, 10);
+
+    if (movesPlayed < 10) {
+        alert('La partida ha acabat abans dels 10 moviments. Prova una altra vegada.');
+        guidedPracticeMode = false;
+        returnToMainMenuImmediate();
+        return;
+    }
+
+    guidedPracticeReview = currentReview.slice(0, 10);
+    guidedPracticeMode = false;
+
+    $('#game-screen').hide();
+    $('#guided-practice-results-screen').show();
+
+    renderGuidedMoves();
+    requestGuidedAnalysis();
+}
+
+function renderGuidedMoves() {
+    const list = $('#guided-moves-list');
+    let html = '';
+    for (let i = 0; i < Math.min(10, guidedPracticeReview.length); i++) {
+        const review = guidedPracticeReview[i];
+        const moveNumber = review.moveNumber;
+        const san = review.playerMoveSan;
+        const quality = review.quality;
+
+        const moveText = guidedPracticeColor === 'white'
+            ? `${moveNumber}. ${san}`
+            : `${moveNumber}... ${san}`;
+
+        html += `<div class="guided-move-item ${quality}">${moveText}</div>`;
+    }
+
+    list.html(html);
+}
+
+async function requestGuidedAnalysis() {
+    if (!geminiApiKey) {
+        $('#guided-loading').hide();
+        $('#guided-content').show();
+        $('#guided-ai-content').html(`
+            <p style="color: var(--severity-med);">
+                ⚠️ Configura la clau de Gemini a Estadístiques → Configuració per rebre anàlisi amb IA.
+            </p>
+        `);
+        return;
+    }
+
+    $('#guided-loading').show();
+    $('#guided-content').hide();
+
+    const prompt = buildGuidedAnalysisPrompt();
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.8,
+                    maxOutputTokens: 3000,
+                    topP: 0.95,
+                    topK: 40
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Gemini error ${response.status}`);
+        }
+
+        const data = await response.json();
+        let text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('')?.trim();
+
+        if (!text) throw new Error('Resposta buida de Gemini');
+
+        displayGuidedAnalysis(text);
+
+    } catch (error) {
+        console.error('Error anàlisi guiada:', error);
+        $('#guided-loading').hide();
+        $('#guided-content').show();
+        $('#guided-ai-content').html(`
+            <p style="color: var(--severity-high);">
+                ❌ No s'ha pogut generar l'anàlisi. Torna-ho a provar.
+            </p>
+        `);
+    }
+}
+
+function buildGuidedAnalysisPrompt() {
+    const moves = game.history().slice(0, 10);
+    const movesText = moves.map((m, i) => {
+        const moveNum = Math.floor(i / 2) + 1;
+        return i % 2 === 0 ? `${moveNum}.${m}` : `${m}`;
+    }).join(' ');
+
+    const reviewDetails = guidedPracticeReview.map((r) => {
+        const qualityLabels = {
+            excel: 'Excel·lent',
+            good: 'Bona',
+            inaccuracy: 'Imprecisió',
+            mistake: 'Error',
+            blunder: 'Blunder'
+        };
+        return `Moviment ${r.moveNumber}: ${r.playerMoveSan} (${qualityLabels[r.quality] || 'Desconegut'}) - Pèrdua: ${r.swing || 0}cp`;
+    }).join('\n');
+
+    const colorText = guidedPracticeColor === 'white' ? 'blanques' : 'negres';
+
+    return `Ets un entrenador d'escacs especialitzat en obertures. Analitza aquesta pràctica d'obertura.
+
+**CONTEXT DEL JUGADOR**
+- ELO: ${userELO}
+- Color jugat: ${colorText}
+- Primers 10 moviments de la partida
+
+**MOVIMENTS JUGATS**
+${movesText}
+
+**QUALITAT DELS MOVIMENTS DEL JUGADOR**
+${reviewDetails}
+
+**OBJECTIU**
+Proporciona una anàlisi constructiva i didàctica per ajudar el jugador a millorar l'obertura.
+
+**FORMAT OBLIGATORI**
+
+**Valoració General**
+Un paràgraf breu valorant el rendiment global (2-3 frases).
+
+**Errors Principals** (si n'hi ha)
+Per cada error significatiu (imprecisions, errors, blunders):
+- Moviment X: [Descripció del problema]
+- Per què és problemàtic: [Explicació]
+- Millor alternativa: [Sugerència amb raonament]
+
+**Principis Aplicats Correctament** (si n'hi ha)
+Llista breu de conceptes d'obertura que el jugador ha aplicat bé.
+
+**Recomanacions de Millora**
+2-3 consells específics i accionables per millorar aquesta obertura.
+
+**REGLES**
+- Màxim 500 paraules
+- To amable i pedagògic
+- Llenguatge directe sense jerga excessiva
+- Enfocament pràctic per ELO ${userELO}
+- Format en català
+- Sense emojis
+- Usar **negreta** per títols de seccions`;
+}
+
+function displayGuidedAnalysis(text) {
+    const formatted = text
+        .replace(/\*\*(.*?)\*\*/g, '<h4>$1</h4>')
+        .replace(/^- (.*?)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*?<\/li>\n?)+/gs, '<ul>$1</ul>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/^(.+)$/gm, '<p>$1</p>');
+
+    $('#guided-ai-content').html(formatted);
+    $('#guided-loading').hide();
+    $('#guided-content').show();
+}
+
+function setupGuidedPracticeEvents() {
+    $('#btn-guided-white').off('click').on('click', () => {
+        startGuidedPractice('white');
+    });
+
+    $('#btn-guided-black').off('click').on('click', () => {
+        startGuidedPractice('black');
+    });
+
+    $('#btn-back-from-guided').off('click').on('click', () => {
+        guidedPracticeMode = false;
+        $('#guided-practice-results-screen').hide();
+        $('#lesson-screen').show();
+    });
+
+    $('#btn-guided-practice-again').off('click').on('click', () => {
+        const color = guidedPracticeColor;
+        guidedPracticeMode = false;
+        $('#guided-practice-results-screen').hide();
+        startGuidedPractice(color);
+    });
+
+    $('#btn-guided-back-lesson').off('click').on('click', () => {
+        guidedPracticeMode = false;
+        $('#guided-practice-results-screen').hide();
+        $('#lesson-screen').show();
+    });
+}
+
 // Event handlers
 function setupLessonEvents() {
     $('#btn-lesson').off('click').on('click', () => {
@@ -7880,7 +8131,7 @@ $(document).ready(() => {
     bundleAcceptMode = loadBundleAcceptMode();
     const bSel = document.getElementById('bundle-accept-select');
     if (bSel) bSel.value = bundleAcceptMode;
-    generateDailyMissions(); checkStreak(); updateDisplay(); setupEvents(); setupLessonEvents();
+    generateDailyMissions(); checkStreak(); updateDisplay(); setupEvents(); setupLessonEvents(); setupGuidedPracticeEvents();
     if (!window.__boardResizeBound) {
         window.__boardResizeBound = true;
         window.addEventListener('resize', () => { if (board) board.resize(); });

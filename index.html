@@ -1848,6 +1848,69 @@
             flex: 1;
         }
 
+        /* ===== PRÀCTICA GUIADA ===== */
+        .lesson-guided-practice {
+            background: linear-gradient(135deg, rgba(74, 124, 89, 0.15) 0%, rgba(74, 124, 89, 0.05) 100%);
+            border: 2px solid rgba(74, 124, 89, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .guided-practice-header h3 {
+            margin: 0 0 8px 0;
+            color: #4a7c59;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .guided-practice-subtitle {
+            margin: 0 0 20px 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .guided-practice-colors {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .guided-practice-btn {
+            padding: 16px;
+            font-size: 1em;
+            font-weight: 600;
+        }
+
+        .lesson-divider {
+            text-align: center;
+            margin: 24px 0;
+            position: relative;
+        }
+
+        .lesson-divider::before,
+        .lesson-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: calc(50% - 40px);
+            height: 1px;
+            background: var(--border-color);
+        }
+
+        .lesson-divider::before { left: 0; }
+        .lesson-divider::after { right: 0; }
+
+        .lesson-divider span {
+            background: var(--bg-primary);
+            padding: 0 16px;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .lesson-main-action {
             text-align: center;
             padding: 40px 20px;
@@ -1868,6 +1931,107 @@
             margin: 0 auto;
         }
 
+        .guided-results-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .guided-results-loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(201, 162, 39, 0.2);
+            border-top-color: var(--accent-gold);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .guided-results-loading p {
+            color: var(--text-secondary);
+            font-size: 0.95em;
+        }
+
+        .guided-moves-played,
+        .guided-ai-feedback {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .guided-moves-played h3,
+        .guided-ai-feedback h3 {
+            margin: 0 0 16px 0;
+            color: var(--accent-cream);
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        #guided-moves-list {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.8;
+            color: var(--text-primary);
+        }
+
+        .guided-move-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+        }
+
+        .guided-move-item.excel { border-left-color: #4a7c59; }
+        .guided-move-item.good { border-left-color: #c9a227; }
+        .guided-move-item.inaccuracy { border-left-color: #ffb74d; }
+        .guided-move-item.mistake { border-left-color: #ef5350; }
+        .guided-move-item.blunder { border-left-color: #b71c1c; }
+
+        #guided-ai-content {
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        #guided-ai-content h4 {
+            color: var(--accent-gold);
+            margin: 20px 0 12px 0;
+            font-size: 1em;
+        }
+
+        #guided-ai-content ul {
+            margin: 12px 0;
+            padding-left: 24px;
+        }
+
+        #guided-ai-content li {
+            margin: 8px 0;
+        }
+
+        #guided-ai-content em {
+            color: var(--accent-cream);
+            font-style: italic;
+        }
+
+        .guided-results-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .guided-results-actions .btn {
+            flex: 1;
+            padding: 14px;
+            font-size: 1em;
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -1875,11 +2039,19 @@
 
         /* Responsive */
         @media (max-width: 600px) {
+            .guided-practice-colors {
+                grid-template-columns: 1fr;
+            }
+
             .lesson-opening-stats {
                 grid-template-columns: 1fr;
             }
             
             .lesson-actions {
+                flex-direction: column;
+            }
+
+            .guided-results-actions {
                 flex-direction: column;
             }
             
@@ -2238,6 +2410,27 @@
             </div>
 
             <div class="lesson-container">
+                <!-- Pràctica guiada -->
+                <div class="lesson-guided-practice">
+                    <div class="guided-practice-header">
+                        <h3>🎓 Pràctica d'Obertura Guiada</h3>
+                        <p class="guided-practice-subtitle">Juga 10 moviments contra Stockfish i rep anàlisi personalitzat amb IA</p>
+                    </div>
+                    
+                    <div class="guided-practice-colors">
+                        <button class="btn btn-primary guided-practice-btn" id="btn-guided-white">
+                            ♔ Practicar amb Blanques
+                        </button>
+                        <button class="btn btn-secondary guided-practice-btn" id="btn-guided-black">
+                            ♚ Practicar amb Negres
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lesson-divider">
+                    <span>o bé</span>
+                </div>
+
                 <!-- Estat de càrrega -->
                 <div id="lesson-loading" style="display:none; text-align:center; padding:40px;">
                     <div class="spinner"></div>
@@ -2387,6 +2580,41 @@
                     <button class="btn btn-secondary btn-large" id="btn-save-lesson">
                         💾 Guardar a biblioteca
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="guided-practice-results-screen" class="screen" style="display:none;">
+            <div class="header">
+                <button class="btn btn-secondary" id="btn-back-from-guided">← Tornar</button>
+                <h2>📊 Anàlisi de la Pràctica</h2>
+            </div>
+
+            <div class="guided-results-container">
+                <div class="guided-results-loading" id="guided-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Gemini està analitzant la teva obertura...</p>
+                </div>
+
+                <div class="guided-results-content" id="guided-content" style="display: none;">
+                    <div class="guided-moves-played">
+                        <h3>Moviments Jugats</h3>
+                        <div id="guided-moves-list"></div>
+                    </div>
+
+                    <div class="guided-ai-feedback">
+                        <h3>🤖 Anàlisi amb IA</h3>
+                        <div id="guided-ai-content"></div>
+                    </div>
+
+                    <div class="guided-results-actions">
+                        <button class="btn btn-primary" id="btn-guided-practice-again">
+                            🔄 Practicar de nou
+                        </button>
+                        <button class="btn btn-secondary" id="btn-guided-back-lesson">
+                            ← Tornar a Lliçons
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
