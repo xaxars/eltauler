@@ -1626,6 +1626,260 @@
         body.device-mobile .history-actions { order: 3; }
         body.device-mobile .history-progress { order: 4; }
         body.device-mobile .history-review { order: 2; }
+
+        /* ===== PANTALLA LLIÇÓ ===== */
+        .lesson-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .lesson-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .lesson-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+        }
+
+        .lesson-icon {
+            font-size: 24px;
+        }
+
+        .lesson-card-header h3 {
+            margin: 0;
+            color: var(--accent-gold);
+            font-size: 1.3rem;
+        }
+
+        .lesson-card-body {
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .lesson-meta {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .lesson-alert {
+            background: rgba(255, 100, 100, 0.1);
+            border-left: 4px solid var(--severity-high);
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+
+        .lesson-alert-title {
+            font-weight: 600;
+            color: var(--severity-high);
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        .lesson-stats {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .lesson-stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(201, 162, 39, 0.05);
+            border-radius: 8px;
+        }
+
+        .lesson-stat-label {
+            font-weight: 500;
+        }
+
+        .lesson-stat-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .lesson-stat-value.good {
+            color: var(--severity-low);
+        }
+
+        .lesson-stat-value.warning {
+            color: var(--severity-med);
+        }
+
+        .lesson-stat-value.danger {
+            color: var(--severity-high);
+        }
+
+        .lesson-color-section {
+            margin-bottom: 24px;
+        }
+
+        .lesson-color-section h4 {
+            color: var(--accent-gold);
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+        }
+
+        .lesson-opening-item {
+            background: rgba(201, 162, 39, 0.05);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .lesson-opening-item:hover {
+            background: rgba(201, 162, 39, 0.1);
+            transform: translateX(4px);
+        }
+
+        .lesson-opening-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .lesson-opening-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .lesson-opening-success {
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+        }
+
+        .lesson-opening-success.good {
+            background: var(--severity-low);
+            color: white;
+        }
+
+        .lesson-opening-success.warning {
+            background: var(--severity-med);
+            color: white;
+        }
+
+        .lesson-opening-success.danger {
+            background: var(--severity-high);
+            color: white;
+        }
+
+        .lesson-opening-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .lesson-opening-stat {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .lesson-opening-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .lesson-opening-actions .btn {
+            flex: 1;
+            font-size: 0.9rem;
+            padding: 8px 12px;
+        }
+
+        .lesson-repertoire-text {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        .lesson-repertoire-text h4 {
+            color: var(--accent-gold);
+            margin-top: 20px;
+            margin-bottom: 12px;
+        }
+
+        .lesson-repertoire-text ul {
+            margin-left: 20px;
+            margin-bottom: 16px;
+        }
+
+        .lesson-repertoire-text li {
+            margin-bottom: 8px;
+        }
+
+        .lesson-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .lesson-actions .btn {
+            flex: 1;
+        }
+
+        .lesson-main-action {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .btn-large {
+            font-size: 1.2rem;
+            padding: 16px 32px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(201, 162, 39, 0.1);
+            border-top: 4px solid var(--accent-gold);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .lesson-opening-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .lesson-actions {
+                flex-direction: column;
+            }
+            
+            .btn-large {
+                font-size: 1rem;
+                padding: 12px 24px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1683,6 +1937,7 @@
                     📚 Revisa Errors
                     <span style="font-size:0.75rem; opacity:0.8;" id="bundle-info">Cap error desat</span>
                 </button>
+                <button class="btn btn-primary" id="btn-lesson">📚 Lliçó</button>
                 <button class="btn btn-secondary" id="btn-history" style="background: linear-gradient(135deg, #6d7b87 0%, #47515a 100%); color: white;">📜 Historial</button>
                 <button class="btn btn-secondary" id="btn-stats" style="background: linear-gradient(135deg, #607d8b 0%, #455a64 100%); color: white;">📊 Estadístiques</button>
             </div>
@@ -1964,6 +2219,92 @@
                 <button class="btn btn-primary" id="btn-league-play">Jugar</button>
                 <button class="btn btn-secondary" id="btn-league-new" style="display:none;">Generar nova lliga</button>
                 <button class="btn btn-secondary" id="btn-back-league">Tornar al Menú</button>
+            </div>
+        </div>
+
+        <!-- PANTALLA LLIÇÓ -->
+        <div id="lesson-screen" class="screen" style="display:none;">
+            <div class="header">
+                <button class="btn btn-secondary" id="btn-back-lesson">← Enrere</button>
+                <h2>📚 La Meva Lliçó</h2>
+            </div>
+
+            <div class="lesson-container">
+                <!-- Estat de càrrega -->
+                <div id="lesson-loading" style="display:none; text-align:center; padding:40px;">
+                    <div class="spinner"></div>
+                    <p style="margin-top:16px; color:var(--text-secondary);">Analitzant les teves últimes partides...</p>
+                </div>
+
+                <!-- Diagnòstic general -->
+                <div id="lesson-diagnosis" style="display:none;">
+                    <div class="lesson-card">
+                        <div class="lesson-card-header">
+                            <span class="lesson-icon">🎯</span>
+                            <h3>Diagnòstic Intel·ligent</h3>
+                        </div>
+                        <div class="lesson-card-body">
+                            <p id="lesson-games-analyzed" class="lesson-meta">—</p>
+                            <div id="lesson-critical-area" class="lesson-alert">
+                                <div class="lesson-alert-title">⚠️ ÀREA CRÍTICA</div>
+                                <div id="lesson-critical-content">—</div>
+                            </div>
+                            <div id="lesson-other-areas" class="lesson-stats">
+                                <!-- S'omplirà dinàmicament -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anàlisi d'obertures -->
+                <div id="lesson-openings" style="display:none;">
+                    <div class="lesson-card">
+                        <div class="lesson-card-header">
+                            <span class="lesson-icon">🎯</span>
+                            <h3>Les Meves Obertures</h3>
+                        </div>
+                        <div class="lesson-card-body">
+                            <div class="lesson-color-section">
+                                <h4>AMB BLANQUES</h4>
+                                <div id="lesson-white-openings">
+                                    <!-- S'omplirà dinàmicament -->
+                                </div>
+                            </div>
+                            <div class="lesson-color-section">
+                                <h4>AMB NEGRES</h4>
+                                <div id="lesson-black-openings">
+                                    <!-- S'omplirà dinàmicament -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Repertori personalitzat -->
+                <div id="lesson-repertoire" style="display:none;">
+                    <div class="lesson-card">
+                        <div class="lesson-card-header">
+                            <span class="lesson-icon">📖</span>
+                            <h3 id="lesson-repertoire-title">El Meu Repertori</h3>
+                        </div>
+                        <div class="lesson-card-body">
+                            <div id="lesson-repertoire-content" class="lesson-repertoire-text">
+                                <!-- Contingut de Gemini -->
+                            </div>
+                            <div class="lesson-actions">
+                                <button class="btn btn-primary" id="btn-lesson-practice">🎯 Practicar amb bundles</button>
+                                <button class="btn btn-secondary" id="btn-lesson-back-openings">← Tornar a obertures</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botó principal -->
+                <div class="lesson-main-action" id="lesson-main-action">
+                    <button class="btn btn-primary btn-large" id="btn-analyze-lessons">
+                        🔍 Analitzar últimes 10 partides
+                    </button>
+                </div>
             </div>
         </div>
 

@@ -6984,6 +6984,656 @@ function updateStatus() {
     }
 }
 
+// ===== SISTEMA DE LLIÇONS =====
+
+let currentLessonData = null;
+let personalRepertoire = {};
+
+// Carregar repertori des de localStorage
+function loadPersonalRepertoire() {
+    try {
+        const stored = localStorage.getItem('chess_personalRepertoire');
+        if (stored) personalRepertoire = JSON.parse(stored);
+    } catch (e) {
+        personalRepertoire = {};
+    }
+}
+
+// Guardar repertori a localStorage
+function savePersonalRepertoire() {
+    try {
+        localStorage.setItem('chess_personalRepertoire', JSON.stringify(personalRepertoire));
+    } catch (e) {
+        console.error('Error guardant repertori:', e);
+    }
+}
+
+// Calcular precisió per rang de moviments
+function calculatePrecisionRange(gameEntry, startMove, endMove) {
+    if (!gameEntry.review || !Array.isArray(gameEntry.review)) return null;
+
+    const movesInRange = gameEntry.review.filter(move =>
+        move.moveNumber >= startMove && move.moveNumber <= endMove
+    );
+
+    if (movesInRange.length === 0) return null;
+
+    const goodMoves = movesInRange.filter(move =>
+        move.quality === 'excel' || move.quality === 'good'
+    ).length;
+
+    return Math.round((goodMoves / movesInRange.length) * 100);
+}
+
+// Analitzar rendiment d'obertures
+function analyzeOpeningPerformance() {
+    const recentGames = gameHistory.slice(-10).filter(g =>
+        g.moves && g.moves.length >= 6
+    );
+
+    if (recentGames.length === 0) {
+        return {
+            totalGames: 0,
+            asWhite: {},
+            asBlack: {},
+            overallStats: null
+        };
+    }
+
+    const stats = {
+        totalGames: recentGames.length,
+        asWhite: {},
+        asBlack: {},
+        overallStats: {
+            earlyPrecision: [],
+            midPrecision: [],
+            latePrecision: []
+        }
+    };
+
+    recentGames.forEach(game => {
+        const color = game.playerColor;
+        const moves = game.moves;
+        const firstMove = color === 'w' ? moves[0] : moves[1];
+
+        if (!firstMove) return;
+
+        const colorKey = color === 'w' ? 'asWhite' : 'asBlack';
+
+        if (!stats[colorKey][firstMove]) {
+            stats[colorKey][firstMove] = {
+                count: 0,
+                wins: 0,
+                draws: 0,
+                losses: 0,
+                earlyPrecision: [],
+                midPrecision: [],
+                criticalMoves: []
+            };
+        }
+
+        const opening = stats[colorKey][firstMove];
+        opening.count++;
+
+        // Classificar resultat
+        if (game.result && game.result.includes('Victòria')) opening.wins++;
+        else if (game.result && game.result.includes('Taules')) opening.draws++;
+        else opening.losses++;
+
+        // Calcular precisió per fases
+        const early = calculatePrecisionRange(game, 1, 10);
+        const mid = calculatePrecisionRange(game, 11, 25);
+        const late = calculatePrecisionRange(game, 26, 100);
+
+        if (early !== null) {
+            opening.earlyPrecision.push(early);
+            stats.overallStats.earlyPrecision.push(early);
+        }
+        if (mid !== null) {
+            opening.midPrecision.push(mid);
+            stats.overallStats.midPrecision.push(mid);
+        }
+        if (late !== null) {
+            stats.overallStats.latePrecision.push(late);
+        }
+
+        // Detectar moviments crítics (errors als primers 10 moviments)
+        if (game.severeErrors && Array.isArray(game.severeErrors)) {
+            const earlyErrors = game.severeErrors.filter(e => e.moveNumber <= 10);
+            earlyErrors.forEach(err => {
+                opening.criticalMoves.push(err.moveNumber);
+            });
+        }
+    });
+
+    return stats;
+}
+
+// Calcular estadístiques d'una obertura
+function calculateOpeningStats(opening) {
+    const total = opening.count;
+    const winRate = Math.round((opening.wins / total) * 100);
+    const avgEarlyPrecision = opening.earlyPrecision.length > 0
+        ? Math.round(opening.earlyPrecision.reduce((a, b) => a + b, 0) / opening.earlyPrecision.length)
+        : null;
+    const avgMidPrecision = opening.midPrecision.length > 0
+        ? Math.round(opening.midPrecision.reduce((a, b) => a + b, 0) / opening.midPrecision.length)
+        : null;
+
+    // Detectar moviment més problemàtic
+    const moveCounts = {};
+    opening.criticalMoves.forEach(move => {
+        moveCounts[move] = (moveCounts[move] || 0) + 1;
+    });
+    const mostProblematic = Object.keys(moveCounts).length > 0
+        ? parseInt(Object.keys(moveCounts).reduce((a, b) => moveCounts[a] > moveCounts[b] ? a : b))
+        : null;
+
+    return {
+        total,
+        winRate,
+        avgEarlyPrecision,
+        avgMidPrecision,
+        mostProblematic,
+        precisionDrop: (avgEarlyPrecision && avgMidPrecision)
+            ? avgEarlyPrecision - avgMidPrecision
+            : null
+    };
+}
+
+// Analitzar i mostrar diagnòstic
+async function performLessonAnalysis() {
+    $('#lesson-loading').show();
+    $('#lesson-diagnosis').hide();
+    $('#lesson-openings').hide();
+    $('#lesson-main-action').hide();
+
+    const openingStats = analyzeOpeningPerformance();
+
+    if (openingStats.totalGames === 0) {
+        $('#lesson-loading').hide();
+        $('#lesson-main-action').show();
+        alert('Necessites almenys una partida guardada per analitzar.');
+        return;
+    }
+
+    // Calcular estadístiques generals
+    const avgEarly = openingStats.overallStats.earlyPrecision.length > 0
+        ? Math.round(openingStats.overallStats.earlyPrecision.reduce((a, b) => a + b, 0) / openingStats.overallStats.earlyPrecision.length)
+        : 0;
+    const avgMid = openingStats.overallStats.midPrecision.length > 0
+        ? Math.round(openingStats.overallStats.midPrecision.reduce((a, b) => a + b, 0) / openingStats.overallStats.midPrecision.length)
+        : 0;
+    const avgLate = openingStats.overallStats.latePrecision.length > 0
+        ? Math.round(openingStats.overallStats.latePrecision.reduce((a, b) => a + b, 0) / openingStats.overallStats.latePrecision.length)
+        : 0;
+
+    const precisionDrop = avgEarly - avgMid;
+
+    // Determinar àrea crítica
+    let criticalArea = 'obertures';
+    let criticalMessage = '';
+
+    if (precisionDrop > 20) {
+        criticalArea = 'obertures';
+        criticalMessage = `
+            <strong>OBERTURES (Moviments 1-10)</strong><br>
+            • Precisió inicial: ${avgEarly}%<br>
+            • Precisió mitjà joc: ${avgMid}%<br>
+            • Pèrdua de precisió: <span style="color: var(--severity-high);">${precisionDrop}%</span> ⚠️<br>
+            <br>
+            <em>Necessites un repertori d'obertura més sòlid.</em>
+        `;
+    } else if (avgMid < avgEarly && avgMid < avgLate) {
+        criticalArea = 'mitjoc';
+        criticalMessage = `
+            <strong>MITJÀ JOC (Moviments 11-25)</strong><br>
+            • Precisió: ${avgMid}%<br>
+            • Precisió obertures: ${avgEarly}%<br>
+            • Precisió finals: ${avgLate}%<br>
+            <br>
+            <em>Cal millorar la comprensió estratègica del mitjà joc.</em>
+        `;
+    } else if (avgLate < 70) {
+        criticalArea = 'finals';
+        criticalMessage = `
+            <strong>FINALS (Moviment 26+)</strong><br>
+            • Precisió: ${avgLate}%<br>
+            <br>
+            <em>Els finals necessiten més estudi i pràctica.</em>
+        `;
+    } else {
+        criticalMessage = `
+            <strong>RENDIMENT EQUILIBRAT</strong><br>
+            • Obertures: ${avgEarly}%<br>
+            • Mitjà joc: ${avgMid}%<br>
+            • Finals: ${avgLate}%<br>
+            <br>
+            <em>Cap àrea crítica detectada. Segueix practicant!</em>
+        `;
+    }
+
+    // Mostrar diagnòstic
+    $('#lesson-games-analyzed').text(`Últimes ${openingStats.totalGames} partides analitzades`);
+    $('#lesson-critical-content').html(criticalMessage);
+
+    // Mostrar altres àrees
+    const otherAreas = $('#lesson-other-areas');
+    otherAreas.empty();
+
+    if (criticalArea !== 'obertures') {
+        otherAreas.append(`
+            <div class="lesson-stat-item">
+                <span class="lesson-stat-label">Obertures (mov 1-10)</span>
+                <span class="lesson-stat-value ${avgEarly >= 70 ? 'good' : avgEarly >= 50 ? 'warning' : 'danger'}">${avgEarly}%</span>
+            </div>
+        `);
+    }
+    if (criticalArea !== 'mitjoc') {
+        otherAreas.append(`
+            <div class="lesson-stat-item">
+                <span class="lesson-stat-label">Mitjà joc (mov 11-25)</span>
+                <span class="lesson-stat-value ${avgMid >= 70 ? 'good' : avgMid >= 50 ? 'warning' : 'danger'}">${avgMid}%</span>
+            </div>
+        `);
+    }
+    if (criticalArea !== 'finals') {
+        otherAreas.append(`
+            <div class="lesson-stat-item">
+                <span class="lesson-stat-label">Finals (mov 26+)</span>
+                <span class="lesson-stat-value ${avgLate >= 70 ? 'good' : avgLate >= 50 ? 'warning' : 'danger'}">${avgLate}%</span>
+            </div>
+        `);
+    }
+
+    // Guardar dades per usar després
+    currentLessonData = {
+        openingStats,
+        criticalArea,
+        avgEarly,
+        avgMid,
+        avgLate,
+        precisionDrop
+    };
+
+    $('#lesson-loading').hide();
+    $('#lesson-diagnosis').show();
+
+    // Si l'àrea crítica són obertures, mostrar anàlisi detallat
+    if (criticalArea === 'obertures') {
+        renderOpeningsAnalysis(openingStats);
+        $('#lesson-openings').show();
+    }
+}
+
+// Renderitzar anàlisi d'obertures
+function renderOpeningsAnalysis(stats) {
+    const whiteContainer = $('#lesson-white-openings');
+    const blackContainer = $('#lesson-black-openings');
+
+    whiteContainer.empty();
+    blackContainer.empty();
+
+    // Obertures amb blanques
+    const whiteOpenings = Object.entries(stats.asWhite)
+        .map(([move, data]) => ({ move, ...calculateOpeningStats(data), data }))
+        .sort((a, b) => b.total - a.total);
+
+    if (whiteOpenings.length === 0) {
+        whiteContainer.append('<p style="color: var(--text-secondary);">No hi ha dades amb blanques</p>');
+    } else {
+        whiteOpenings.forEach(opening => {
+            whiteContainer.append(renderOpeningItem(opening, 'white'));
+        });
+    }
+
+    // Obertures amb negres
+    const blackOpenings = Object.entries(stats.asBlack)
+        .map(([move, data]) => ({ move, ...calculateOpeningStats(data), data }))
+        .sort((a, b) => b.total - a.total);
+
+    if (blackOpenings.length === 0) {
+        blackContainer.append('<p style="color: var(--text-secondary);">No hi ha dades amb negres</p>');
+    } else {
+        blackOpenings.forEach(opening => {
+            blackContainer.append(renderOpeningItem(opening, 'black'));
+        });
+    }
+}
+
+// Renderitzar item d'obertura
+function renderOpeningItem(opening, color) {
+    const successClass = opening.winRate >= 60 ? 'good' : opening.winRate >= 40 ? 'warning' : 'danger';
+    const earlyClass = opening.avgEarlyPrecision >= 70 ? 'good' : opening.avgEarlyPrecision >= 50 ? 'warning' : 'danger';
+    const midClass = opening.avgMidPrecision >= 70 ? 'good' : opening.avgMidPrecision >= 50 ? 'warning' : 'danger';
+
+    const precisionDropWarning = opening.precisionDrop > 20
+        ? `<div style="color: var(--severity-high); margin-top: 8px;">⚠️ Perds ${opening.precisionDrop}% precisió després del moviment 10</div>`
+        : '';
+
+    const criticalMoveWarning = opening.mostProblematic
+        ? `<div style="color: var(--severity-med); margin-top: 4px;">Error més comú: Moviment ${opening.mostProblematic}</div>`
+        : '';
+
+    return `
+        <div class="lesson-opening-item" data-move="${opening.move}" data-color="${color}">
+            <div class="lesson-opening-header">
+                <span class="lesson-opening-name">${color === 'white' ? '1.' : '1...'}${opening.move}</span>
+                <span class="lesson-opening-success ${successClass}">${opening.winRate}% èxit</span>
+            </div>
+            <div class="lesson-opening-stats">
+                <div class="lesson-opening-stat">
+                    <span>Partides:</span>
+                    <span>${opening.total}</span>
+                </div>
+                <div class="lesson-opening-stat">
+                    <span>V/E/D:</span>
+                    <span>${opening.data.wins}/${opening.data.draws}/${opening.data.losses}</span>
+                </div>
+                <div class="lesson-opening-stat">
+                    <span>Precisió mov 1-10:</span>
+                    <span class="${earlyClass}">${opening.avgEarlyPrecision || '—'}%</span>
+                </div>
+                <div class="lesson-opening-stat">
+                    <span>Precisió mov 11-25:</span>
+                    <span class="${midClass}">${opening.avgMidPrecision || '—'}%</span>
+                </div>
+            </div>
+            ${precisionDropWarning}
+            ${criticalMoveWarning}
+            <div class="lesson-opening-actions">
+                <button class="btn btn-primary btn-study-opening" data-move="${opening.move}" data-color="${color}">
+                    📚 Estudiar línia
+                </button>
+                <button class="btn btn-secondary btn-practice-opening" data-move="${opening.move}" data-color="${color}">
+                    🎯 Practicar
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Generar repertori amb Gemini
+async function generateOpeningRepertoire(move, color) {
+    if (!geminiApiKey) {
+        alert('Configura la clau de Gemini a Estadístiques → Configuració per utilitzar aquesta funció.');
+        return;
+    }
+
+    $('#lesson-openings').hide();
+    $('#lesson-loading').show();
+
+    // Obtenir partides recents amb aquesta obertura
+    const recentGames = gameHistory
+        .slice(-10)
+        .filter(g => {
+            if (!g.moves || g.moves.length < 2) return false;
+            const firstMove = color === 'white' ? g.moves[0] : g.moves[1];
+            return firstMove === move;
+        })
+        .slice(-5);
+
+    const gamesContext = recentGames.map(g => {
+        const result = g.result || '—';
+        const precision = g.precision || 0;
+        const firstMoves = g.moves.slice(0, 10).join(' ');
+        return `• ${result} (${precision}% precisió): ${firstMoves}`;
+    }).join('\n');
+
+    const prompt = `Ets un entrenador d'escacs especialitzat en obertures.
+
+CONTEXT:
+- El jugador té ELO ${userELO}
+- Juga ${move} amb ${color === 'white' ? 'blanques' : 'negres'}
+- Té problemes de precisió després del moviment 3
+- Perd precisió en transicionar de l'obertura al mitjà joc
+
+Últimes ${recentGames.length} partides amb aquesta obertura:
+${gamesContext || 'No hi ha partides recents'}
+
+OBJECTIU:
+Crea un repertori d'obertura SIMPLE i SÒLID per aquest nivell d'ELO.
+
+ESTRUCTURA (OBLIGATÒRIA):
+**Línia principal recomanada**
+Escriu els primers 8-10 moviments amb explicació breu de cada moviment clau.
+Format: 1.e4 e5 2.Nf3 Nc6 3.Bb5 (Variant Espanyola - controla el centre)
+
+**Principis clau** (màxim 3)
+- Principi 1: Desenvolupar ràpid els cavalls cap al centre
+- Principi 2: ...
+- Principi 3: ...
+
+**Trampes a evitar** (màxim 2)
+- Si el rival juga X, NO juguis Y perquè...
+- ...
+
+**Pla general** (1-2 frases)
+Què buscar a partir del moviment 8: controlar caselles, atac al rei, etc.
+
+FORMAT:
+- Màxim 400 paraules
+- Llenguatge directe i pràctic
+- Sense variacions complexes
+- Enfocament pedagògic per ELO ${userELO}`;
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 2048,
+                    topP: 0.9,
+                    topK: 40
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Gemini error ${response.status}`);
+        }
+
+        const data = await response.json();
+        let text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('')?.trim();
+
+        if (!text) throw new Error('Resposta buida de Gemini');
+
+        // Guardar repertori
+        const repertoireKey = `${color}_${move}`;
+        personalRepertoire[repertoireKey] = {
+            move,
+            color,
+            content: text,
+            createdAt: new Date().toISOString(),
+            elo: userELO
+        };
+        savePersonalRepertoire();
+
+        // Mostrar repertori
+        showRepertoire(move, color, text);
+
+    } catch (error) {
+        console.error('Error generant repertori:', error);
+        $('#lesson-loading').hide();
+        $('#lesson-openings').show();
+        alert('No s\'ha pogut generar el repertori. Torna-ho a provar.');
+    }
+}
+
+// Mostrar repertori
+function showRepertoire(move, color, content) {
+    $('#lesson-loading').hide();
+    $('#lesson-diagnosis').hide();
+    $('#lesson-openings').hide();
+
+    const moveText = color === 'white' ? `1.${move}` : `1...${move}`;
+
+    $('#lesson-repertoire-title').text(`El Meu Repertori: ${moveText}`);
+
+    // Formatejar contingut
+    const formatted = content
+        .replace(/\*\*(.*?)\*\*/g, '<h4>$1</h4>')
+        .replace(/- (.*?)(?=\n|$)/g, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+    $('#lesson-repertoire-content').html(formatted);
+
+    // Configurar botons
+    $('#btn-lesson-practice').off('click').on('click', () => {
+        generateOpeningBundles(move, color);
+    });
+
+    $('#btn-lesson-back-openings').off('click').on('click', () => {
+        $('#lesson-repertoire').hide();
+        $('#lesson-diagnosis').show();
+        $('#lesson-openings').show();
+    });
+
+    $('#lesson-repertoire').show();
+}
+
+// Generar bundles d'obertura
+function generateOpeningBundles(move, color) {
+    // Obtenir FENs de posicions típiques després de 2-3 moviments
+    const positions = getOpeningPositions(move, color);
+
+    let added = 0;
+    positions.forEach(pos => {
+        if (!savedErrors.find(e => e.fen === pos.fen)) {
+            savedErrors.push({
+                fen: pos.fen,
+                date: new Date().toLocaleDateString(),
+                severity: 'med',
+                elo: userELO,
+                bestMove: null,
+                playerMove: null,
+                bestMovePv: [],
+                category: 'opening-training',
+                description: pos.description
+            });
+            added++;
+        }
+    });
+
+    saveStorage();
+    updateDisplay();
+
+    if (added > 0) {
+        alert(`S'han afegit ${added} exercicis d'obertura als teus bundles. Ves a 📚 Bundle per practicar!`);
+        $('#lesson-repertoire').hide();
+        returnToMainMenuImmediate();
+    } else {
+        alert('Ja tens aquests exercicis als bundles.');
+    }
+}
+
+// Obtenir posicions d'obertura típiques
+function getOpeningPositions(move, color) {
+    // Posicions genèriques segons obertura
+    const positions = [];
+
+    if (color === 'white' && move === 'e4') {
+        positions.push(
+            {
+                fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2',
+                description: '1.e4 e5 - Quin és el millor desenvolupament?'
+            },
+            {
+                fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+                description: 'Després de 2.Nf3, com respon el rival?'
+            },
+            {
+                fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+                description: '2...Nc6 - Continua el desenvolupament'
+            }
+        );
+    } else if (color === 'white' && move === 'd4') {
+        positions.push(
+            {
+                fen: 'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1',
+                description: '1.d4 - Quina és la millor resposta?'
+            },
+            {
+                fen: 'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2',
+                description: 'Després de 1...d5, com continuar?'
+            }
+        );
+    } else if (color === 'black' && move === 'e5') {
+        positions.push(
+            {
+                fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+                description: 'Després de 2.Nf3, com defensar e5?'
+            }
+        );
+    } else if (color === 'black' && move === 'c5') {
+        positions.push(
+            {
+                fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+                description: 'Siciliana: com respon el blanc?'
+            }
+        );
+    }
+
+    // Si no hi ha posicions específiques, afegir genèriques
+    if (positions.length === 0) {
+        positions.push({
+            fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            description: `Practica ${color === 'white' ? '1.' : '1...'}${move}`
+        });
+    }
+
+    return positions;
+}
+
+// Event handlers
+function setupLessonEvents() {
+    $('#btn-lesson').off('click').on('click', () => {
+        $('#start-screen').hide();
+        $('#lesson-screen').show();
+
+        // Reset views
+        $('#lesson-loading').hide();
+        $('#lesson-diagnosis').hide();
+        $('#lesson-openings').hide();
+        $('#lesson-repertoire').hide();
+        $('#lesson-main-action').show();
+    });
+
+    $('#btn-back-lesson').off('click').on('click', () => {
+        $('#lesson-screen').hide();
+        $('#start-screen').show();
+    });
+
+    $('#btn-analyze-lessons').off('click').on('click', () => {
+        performLessonAnalysis();
+    });
+
+    // Event delegation per obertures
+    $(document).on('click', '.btn-study-opening', function() {
+        const move = $(this).data('move');
+        const color = $(this).data('color');
+
+        // Comprovar si ja existeix repertori
+        const repertoireKey = `${color}_${move}`;
+        if (personalRepertoire[repertoireKey]) {
+            showRepertoire(move, color, personalRepertoire[repertoireKey].content);
+        } else {
+            generateOpeningRepertoire(move, color);
+        }
+    });
+
+    $(document).on('click', '.btn-practice-opening', function() {
+        const move = $(this).data('move');
+        const color = $(this).data('color');
+        generateOpeningBundles(move, color);
+    });
+}
+
 // PWA Install functionality
 let deferredPrompt;
 
@@ -7011,6 +7661,7 @@ $('#btn-dismiss-install').on('click', () => {
 $(document).ready(() => {
     updateDeviceType();
     loadStorage();
+    loadPersonalRepertoire();
     if (!isCalibrationActive()) {
         syncEngineEloFromUser();
     }
@@ -7020,7 +7671,7 @@ $(document).ready(() => {
     bundleAcceptMode = loadBundleAcceptMode();
     const bSel = document.getElementById('bundle-accept-select');
     if (bSel) bSel.value = bundleAcceptMode;
-    generateDailyMissions(); checkStreak(); updateDisplay(); setupEvents(); 
+    generateDailyMissions(); checkStreak(); updateDisplay(); setupEvents(); setupLessonEvents();
     if (!window.__boardResizeBound) {
         window.__boardResizeBound = true;
         window.addEventListener('resize', () => { if (board) board.resize(); });
