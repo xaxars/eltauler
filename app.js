@@ -4016,43 +4016,61 @@ function buildBundleGeminiPromptWithFixedSequence(step) {
     if (!bundleFixedSequence) return null;
     
     const stepData = step === 1 ? bundleFixedSequence.step1 : bundleFixedSequence.step2;
-    const stepLabel = step === 1 ? "primer" : "segon";
     
-    return `Ets un entrenador d'escacs expert. Genera 2 frases màxima en català per ajudar a trobar la millor jugada del ${stepLabel} pas d'aquesta seqüència tàctica.
+    if (step === 1) {
+        return `Ets un mestre d'escacs que aplica els principis de l'Art de la Guerra de Sun Tzu als escacs.
 
-SEQÜÈNCIA COMPLETA (no revelar):
+SEQÜÈNCIA TÀCTICA COMPLETA (no revelar):
 1. Jugador: ${bundleFixedSequence.fullSequenceSan[0]}
 2. Oponent: ${bundleFixedSequence.fullSequenceSan[1]}
 3. Jugador: ${bundleFixedSequence.fullSequenceSan[2]}
 
-CONTEXT DEL PAS ${step}:
+CONTEXT DEL PRIMER PAS:
 Posició (FEN): ${stepData.fen}
 Millor jugada: ${stepData.playerMoveSan}
-Variant principal: ${stepData.playerMovePv.slice(0, 4).join(' ')}
-Avaluació: ${stepData.evalBefore} centipawns
+Balanç material: ${stepData.position.material.balance}
+Temes tàctics: ${stepData.threats.themes.join(', ') || 'Cap'}
 
-CONTEXT POSICIONAL:
-- Balanç material: ${stepData.position.material.balance}
-- Temes: ${stepData.threats.themes.join(', ') || 'Cap'}
-- Amenaces: ${stepData.threats.threats.map(t => t.description || t.type).join('; ') || 'Cap'}
+INSTRUCCIONS:
+Genera exactament 2 màximes o principis d'escacs inspirats en l'Art de la Guerra:
 
-${step === 1 ? `
-PER AL PAS 1, genera dues frases:
-- Primera frase: Apunta a un concepte tàctic general aplicable
-- Segona frase: Orienta subtilment cap a la peça o zona clau
-` : `
-PER AL PAS 2, genera dues frases:
-- Primera frase: Com consolidar l'avantatge obtingut
-- Segona frase: Principi per mantenir la pressió
-`}
+1. Primera màxima: Visió estratègica general que engloba els dos moviments de la seqüència sencera
+2. Segona màxima: Principi tàctic específic pel primer moviment concret
 
-REGLES:
-- Cada frase mínim 20, màxim 250 caràcters
-- Específiques i accionables, no genèriques
+REGLES IMPERATIVES:
+- Només les màximes, res més
+- Cada màxima entre 20-200 caràcters
+- Inspirades en l'Art de la Guerra de Sun Tzu
 - NO revelar directament la solució
-- Centrar-se en conceptes tàctics concrets
+- NO numerar les màximes
+- NO afegir comentaris explicatius
 
-Genera ara 2 frases específiques:`;
+FORMAT DE SORTIDA:
+Màxima general
+Màxima específica`;
+    } else {
+        return `Ets un mestre d'escacs que aplica els principis de l'Art de la Guerra de Sun Tzu als escacs.
+
+CONTEXT DEL SEGON PAS:
+Posició (FEN): ${stepData.fen}
+Millor jugada: ${stepData.playerMoveSan}
+Balanç material: ${stepData.position.material.balance}
+Temes tàctics: ${stepData.threats.themes.join(', ') || 'Cap'}
+
+INSTRUCCIONS:
+Genera exactament 1 màxima o principi d'escacs inspirat en l'Art de la Guerra per al segon moviment de la seqüència.
+
+REGLES IMPERATIVES:
+- Només la màxima, res més
+- Entre 20-200 caràcters
+- Inspirada en l'Art de la Guerra de Sun Tzu
+- NO revelar directament la solució
+- NO numerar
+- NO afegir comentaris explicatius
+
+FORMAT DE SORTIDA:
+Màxima específica`;
+    }
 }
 
 async function requestGeminiBundleHint() {
@@ -4162,9 +4180,9 @@ async function requestGeminiBundleHint() {
         }
         
         let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
-        html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
+        html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Principis d\'escacs:</div>';
         trimmedLines.forEach(line => {
-            html += `<div style="font-style:italic; margin:4px 0;">"${line.trim()}"</div>`;
+            html += `<div style="font-style:italic; margin:4px 0;">${line.trim()}</div>`;
         });
         html += '</div>';
         
