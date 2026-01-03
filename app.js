@@ -7860,6 +7860,13 @@ $('#btn-dismiss-install').on('click', () => {
 
 // Inicialització
 $(document).ready(() => {
+    // Assegurar que només es mostra la pantalla d'inici
+    $('#game-screen').hide();
+    $('#stats-screen').hide();
+    $('#league-screen').hide();
+    $('#history-screen').hide();
+    $('#calibration-result-screen').hide();
+    $('#start-screen').show();
     updateDeviceType();
     loadStorage();
     loadPersonalRepertoire();
