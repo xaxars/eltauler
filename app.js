@@ -7158,83 +7158,115 @@ function buildLessonErrorsFromGames(recentGames) {
 }
 
 function renderLessonErrors() {
-    const containers = {
-        openings: $('#lesson-openings-content'),
-        middlegame: $('#lesson-middlegame-content'),
-        endgame: $('#lesson-endgame-content')
+    const sectionConfig = {
+        current: {
+            containers: {
+                openings: $('#lesson-openings-content'),
+                middlegame: $('#lesson-middlegame-content'),
+                endgame: $('#lesson-endgame-content')
+            },
+            counts: {
+                openings: $('#lesson-openings-count'),
+                middlegame: $('#lesson-middlegame-count'),
+                endgame: $('#lesson-endgame-count')
+            }
+        },
+        library: {
+            containers: {
+                openings: $('#lesson-library-openings-content'),
+                middlegame: $('#lesson-library-middlegame-content'),
+                endgame: $('#lesson-library-endgame-content')
+            },
+            counts: {
+                openings: $('#lesson-library-openings-count'),
+                middlegame: $('#lesson-library-middlegame-count'),
+                endgame: $('#lesson-library-endgame-count')
+            }
+        }
     };
-    const counts = {
-        openings: $('#lesson-openings-count'),
-        middlegame: $('#lesson-middlegame-count'),
-        endgame: $('#lesson-endgame-count')
-    };
 
-    Object.values(containers).forEach(container => container.empty());
+    Object.values(sectionConfig).forEach(section => {
+        Object.values(section.containers).forEach(container => container.empty());
+    });
 
-    const entriesByPhase = { openings: [], middlegame: [], endgame: [] };
-
-    if (currentLessonErrors) {
+    const buildEntriesByPhase = (sourceErrors, lessonNumber) => {
+        const entriesByPhase = { openings: [], middlegame: [], endgame: [] };
+        if (!sourceErrors) return entriesByPhase;
         Object.keys(entriesByPhase).forEach(phase => {
-            currentLessonErrors[phase].forEach(err => {
-                entriesByPhase[phase].push({ ...err, lessonNumber: null });
-            });
-        });
-    }
-
-    lessonErrors.forEach(lesson => {
-        const number = lesson.lessonNumber;
-        Object.keys(entriesByPhase).forEach(phase => {
-            const list = lesson.categories?.[phase] || [];
+            const list = sourceErrors[phase] || [];
             list.forEach(err => {
-                entriesByPhase[phase].push({ ...err, lessonNumber: number });
+                entriesByPhase[phase].push({ ...err, lessonNumber });
             });
         });
-    });
+        return entriesByPhase;
+    };
 
-    Object.keys(entriesByPhase).forEach(phase => {
-        const items = entriesByPhase[phase];
-        counts[phase].text(items.length);
-        if (items.length === 0) {
-            containers[phase].append('<div class="bundle-empty">Cap error en aquesta categoria</div>');
-            return;
-        }
+    const renderPhaseItems = (section, entriesByPhase, labelPrefix) => {
+        Object.keys(entriesByPhase).forEach(phase => {
+            const items = entriesByPhase[phase];
+            section.counts[phase].text(items.length);
+            if (items.length === 0) {
+                section.containers[phase].append('<div class="bundle-empty">Cap error en aquesta categoria</div>');
+                return;
+            }
 
-        const listHtml = items.map(err => {
-            const severityClass = err.severity === 'med' || err.severity === 'high' || err.severity === 'low'
-                ? err.severity
-                : 'high';
-            const lessonLabel = err.lessonNumber ? `Lliçó ${err.lessonNumber}` : 'Lliçó actual';
-            return `
-                <div class="bundle-item ${severityClass}" data-fen="${err.fen || ''}" data-severity="${severityClass}">
-                    <div>
-                        <strong>${lessonLabel}</strong>
-                        <div class="bundle-meta">Moviment ${err.moveNumber} · ${err.label || '—'}</div>
+            const listHtml = items.map(err => {
+                const severityClass = err.severity === 'med' || err.severity === 'high' || err.severity === 'low'
+                    ? err.severity
+                    : 'high';
+                const lessonLabel = err.lessonNumber ? `${labelPrefix} ${err.lessonNumber}` : labelPrefix;
+                return `
+                    <div class="bundle-item ${severityClass}" data-fen="${err.fen || ''}" data-severity="${severityClass}">
+                        <div>
+                            <strong>${lessonLabel}</strong>
+                            <div class="bundle-meta">Moviment ${err.moveNumber} · ${err.label || '—'}</div>
+                        </div>
                     </div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
 
-        containers[phase].append(`<div class="bundle-list">${listHtml}</div>`);
-    });
+            section.containers[phase].append(`<div class="bundle-list">${listHtml}</div>`);
+        });
+    };
 
-    $('#lesson-errors-folders .bundle-section-header').off('click').on('click', function() {
-        $(this).closest('.bundle-section').toggleClass('open');
-    });
+    const currentEntries = buildEntriesByPhase(currentLessonErrors, 'actual');
+    renderPhaseItems(sectionConfig.current, currentEntries, 'Lliçó actual');
 
-    $('#lesson-errors-folders .bundle-item').off('click').on('click', function() {
-        const fen = this.dataset.fen;
-        const severity = this.dataset.severity || 'high';
-        if (!fen) {
-            alert('Aquest error no té una posició disponible per practicar.');
-            return;
-        }
-        startBundleGame(fen, severity);
+    const libraryEntriesByPhase = { openings: [], middlegame: [], endgame: [] };
+    lessonErrors.forEach(lesson => {
+        const entries = buildEntriesByPhase(lesson.categories, lesson.lessonNumber);
+        Object.keys(entries).forEach(phase => {
+            libraryEntriesByPhase[phase].push(...entries[phase]);
+        });
     });
+    renderPhaseItems(sectionConfig.library, libraryEntriesByPhase, 'Lliçó');
+
+    const bindFolderHandlers = (selector) => {
+        $(`${selector} .bundle-section-header`).off('click').on('click', function() {
+            $(this).closest('.bundle-section').toggleClass('open');
+        });
+
+        $(`${selector} .bundle-item`).off('click').on('click', function() {
+            const fen = this.dataset.fen;
+            const severity = this.dataset.severity || 'high';
+            if (!fen) {
+                alert('Aquest error no té una posició disponible per practicar.');
+                return;
+            }
+            startBundleGame(fen, severity);
+        });
+    };
+
+    bindFolderHandlers('#lesson-errors-folders');
+    bindFolderHandlers('#lesson-library-folders');
 }
 
 function updateLessonSaveState() {
     const hasCurrent = currentLessonErrors && Object.values(currentLessonErrors).some(list => list.length > 0);
+    $('#lesson-severe-errors').toggle(!!hasCurrent);
     $('#lesson-save-action').toggle(!!hasCurrent);
+    const hasLibrary = lessonErrors.length > 0;
+    $('#lesson-library').toggle(hasLibrary);
 }
 
 // Calcular estadístiques d'una obertura
@@ -7275,6 +7307,7 @@ async function performLessonAnalysis() {
     $('#lesson-diagnosis').hide();
     $('#lesson-openings').hide();
     $('#lesson-severe-errors').hide();
+    $('#lesson-library').hide();
     $('#lesson-save-action').hide();
     $('#lesson-main-action').hide();
 
@@ -7741,8 +7774,12 @@ function setupLessonEvents() {
         $('#lesson-openings').hide();
         $('#lesson-repertoire').hide();
         $('#lesson-severe-errors').hide();
+        $('#lesson-library').hide();
         $('#lesson-save-action').hide();
         $('#lesson-main-action').show();
+
+        renderLessonErrors();
+        updateLessonSaveState();
     });
 
     $('#btn-back-lesson').off('click').on('click', () => {
