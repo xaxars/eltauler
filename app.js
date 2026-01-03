@@ -3941,7 +3941,10 @@ function getSevereErrors(entries) {
             evalAfter: entry.evalAfter ?? null,
             swing: entry.swing || null,
             isCapture: !!entry.isCapture,
-            isCheck: !!entry.isCheck
+            isCheck: !!entry.isCheck,
+            depth: entry.depth || null,
+            alternatives: entry.alternatives || [],
+            quality: entry.quality || 'blunder'
         }));
 }
 
@@ -4074,7 +4077,19 @@ async function requestGeminiBundleHint() {
     } else {
         // Fallback al mètode antic
         const errorContext = {};
-        const currentError = savedErrors.find(e => e.fen === currentBundleFen);
+        // Buscar primer a savedErrors
+        let currentError = savedErrors.find(e => e.fen === currentBundleFen);
+
+        // Si no es troba, buscar a gameHistory.severeErrors
+        if (!currentError) {
+            for (const entry of gameHistory) {
+                if (entry.severeErrors && Array.isArray(entry.severeErrors)) {
+                    currentError = entry.severeErrors.find(e => e.fen === currentBundleFen);
+                    if (currentError) break;
+                }
+            }
+        }
+
         if (currentError) {
             errorContext.fen = currentError.fen;
             errorContext.bestMove = currentError.bestMove;
@@ -4084,6 +4099,7 @@ async function requestGeminiBundleHint() {
         } else {
             errorContext.fen = currentBundleFen;
         }
+
         const step = bundleSequenceStep === 2 ? 2 : 1;
         prompt = buildGeminiBundleHintPrompt(step, errorContext);
     }
@@ -4116,10 +4132,9 @@ async function requestGeminiBundleHint() {
             console.error('[Gemini] Error response:', response.status, errorBody);
             throw new Error(`Gemini error ${response.status}: ${errorBody}`);
         }
-
+        
         const data = await response.json();
         const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
-
         if (!text) throw new Error('Resposta buida de Gemini');
         
         const lines = text.split('\n').filter(l => l.trim());
@@ -4145,7 +4160,7 @@ async function requestGeminiBundleHint() {
             trimmedLines.push(trimmedLine);
             remainingChars -= trimmedLine.length;
         }
-
+        
         let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
         html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Màxima d\'escacs:</div>';
         trimmedLines.forEach(line => {
@@ -5083,9 +5098,10 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
             fen: err.fen,
             severity: err.severity,
             bestMove: err.bestMove || null,
-            playerMove: err.playerMove || null
+            playerMove: err.playerMove || null,
+            bestMovePv: err.bestMovePv || []
         })),
-        review: currentReview.slice(),
+        review: [], // ← BUIDAT: ja no cal guardar review completa
         severeErrors: Array.isArray(options.severeErrors) ? options.severeErrors : [],
         geminiReview: options.geminiReview || null,
         playerColor: playerColor,
@@ -5094,6 +5110,7 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
     };
     gameHistory.push(entry);
     if (gameHistory.length > 10) gameHistory = gameHistory.slice(-10);
+    // Bloc de neteja de reviews eliminat
 }
 
 function checkShareSupport() {
@@ -6554,6 +6571,12 @@ function handleBundleSuccess() {
         savedErrors = savedErrors.filter(e => e.fen !== currentBundleFen);
         currentBundleFen = null;
     }
+    // Netejar l'error també de les partides guardades
+    gameHistory.forEach(entry => {
+    if (entry.severeErrors && Array.isArray(entry.severeErrors)) {
+        entry.severeErrors = entry.severeErrors.filter(err => err.fen !== currentBundleFen);
+    }
+});
     
     saveStorage(); updateDisplay(); checkMissions();
     board.draggable = false;
@@ -6803,14 +6826,12 @@ function handleGameOver(manualResign = false) {
     if (wasLeagueMatch && !blunderMode) {
         applyLeagueAfterGame(leagueOutcome);
     }
-    
     const reviewCounts = summarizeReview(currentReview);
-    const severeErrors = getSevereErrors(currentReview);
+    const severeErrors = currentGameErrors.slice(); // ← Usar currentGameErrors
     recordGameHistory(msg, finalPrecision, reviewCounts, { severeErrors });
     persistReviewSummary(finalPrecision, msg);
     recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
     $('#status').text(msg);
-    
     // Gestió de l'indicador de resultat
     if (leagueOutcome === 'win') setResultIndicator('win');
     else if (leagueOutcome === 'loss') setResultIndicator('loss');
