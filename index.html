@@ -319,6 +319,70 @@
         body.epaper-mode .select-control { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
         body.epaper-mode .text-input { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
         .setting-help { margin-top: 8px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.25; }
+        .gemini-config {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .gemini-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
+        #gemini-key-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.25);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        #btn-save-gemini-key {
+            flex-shrink: 0;
+            white-space: nowrap;
+            padding: 10px 16px;
+        }
+
+        .gemini-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        #gemini-key-status {
+            font-weight: 600;
+        }
+
+        /* Mòbil: layout adaptatiu */
+        @media (max-width: 520px) {
+            .gemini-input-row {
+                flex-direction: column;
+            }
+            
+            #gemini-key-input {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            #btn-save-gemini-key {
+                width: 100%;
+            }
+            
+            .gemini-status {
+                justify-content: space-between;
+            }
+        }
         body.epaper-mode .header,
         body.epaper-mode .precision-panel,
         body.epaper-mode .controls,
@@ -847,6 +911,22 @@
             font-size: 0.9rem;
         }
 
+        /* Botó de rendir-se integrat al requadre de joc (desktop) */
+        @media (min-width: 769px) {
+            .controls {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 12px;
+                padding: 16px;
+            }
+            
+            #btn-resign {
+                order: 10; /* Col·locar al final */
+                margin-left: auto;
+            }
+        }
+        
         /* Botó del cervell - millorat */
         .btn-brain-hint {
             background: linear-gradient(135deg, #5e35b1, #4527a0);
@@ -1654,11 +1734,16 @@
                 <div class="setting-help">Això resetarà el teu perfil actual.</div>
                 <div class="setting-row" style="margin-top:10px;">
                     <div class="setting-label">Clau API Gemini (gemini-3-flash-preview)</div>
-                    <div class="setting-inline">
-                        <input type="password" id="gemini-key-input" class="text-input" placeholder="Enganxa la clau">
+                </div>
+                <div class="gemini-config">
+                    <div class="gemini-input-row">
+                        <input type="password" id="gemini-key-input" placeholder="Enganxa la clau API" />
                         <button class="btn btn-secondary" id="btn-save-gemini-key">Guardar</button>
                     </div>
-                    <div class="setting-status" id="gemini-key-status">—</div>
+                    <div class="gemini-status">
+                        <span>Estat:</span>
+                        <span id="gemini-key-status">—</span>
+                    </div>
                 </div>
                 <div class="setting-help">La clau queda guardada i les revisions de partides es generen automàticament.</div>
             </div>
