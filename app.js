@@ -7205,7 +7205,7 @@ function renderLessonErrors() {
                 : 'high';
             const lessonLabel = err.lessonNumber ? `Lliçó ${err.lessonNumber}` : 'Lliçó actual';
             return `
-                <div class="bundle-item ${severityClass}">
+                <div class="bundle-item ${severityClass}" data-fen="${err.fen || ''}" data-severity="${severityClass}">
                     <div>
                         <strong>${lessonLabel}</strong>
                         <div class="bundle-meta">Moviment ${err.moveNumber} · ${err.label || '—'}</div>
@@ -7219,6 +7219,16 @@ function renderLessonErrors() {
 
     $('#lesson-errors-folders .bundle-section-header').off('click').on('click', function() {
         $(this).closest('.bundle-section').toggleClass('open');
+    });
+
+    $('#lesson-errors-folders .bundle-item').off('click').on('click', function() {
+        const fen = this.dataset.fen;
+        const severity = this.dataset.severity || 'high';
+        if (!fen) {
+            alert('Aquest error no té una posició disponible per practicar.');
+            return;
+        }
+        startBundleGame(fen, severity);
     });
 }
 
