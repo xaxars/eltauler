@@ -6796,12 +6796,14 @@ function registerEngineMovePrecision(moveStr, candidates) {
 }
 
 function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = []) {
+    const moveNumber = game ? Math.ceil(game.history().length / 2) : null;
      if (!blunderMode) {
         const alreadyTracked = currentGameErrors.some(e => e.fen === fen);
         if (!alreadyTracked) {
             currentGameErrors.push({
                 fen,
                 severity,
+                moveNumber,
                 bestMove: bestMove || null,
                 playerMove: playerMove || lastHumanMoveUci || null,
                 bestMovePv: bestMovePv || []
@@ -6816,6 +6818,7 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = [
             date: new Date().toLocaleDateString(),
             severity: severity,
             elo: userELO,
+            moveNumber,
             bestMove: bestMove || null,
             playerMove: playerMove || lastHumanMoveUci || null,
             bestMovePv: bestMovePv || []
@@ -6988,6 +6991,9 @@ function updateStatus() {
 
 let currentLessonData = null;
 let personalRepertoire = {};
+let lessonErrors = [];
+let currentLessonErrors = null;
+const LESSON_ERRORS_KEY = 'chess_lesson_errors';
 
 // Carregar repertori des de localStorage
 function loadPersonalRepertoire() {
@@ -7005,6 +7011,23 @@ function savePersonalRepertoire() {
         localStorage.setItem('chess_personalRepertoire', JSON.stringify(personalRepertoire));
     } catch (e) {
         console.error('Error guardant repertori:', e);
+    }
+}
+
+function loadLessonErrors() {
+    try {
+        const stored = localStorage.getItem(LESSON_ERRORS_KEY);
+        if (stored) lessonErrors = JSON.parse(stored);
+    } catch (e) {
+        lessonErrors = [];
+    }
+}
+
+function saveLessonErrors() {
+    try {
+        localStorage.setItem(LESSON_ERRORS_KEY, JSON.stringify(lessonErrors));
+    } catch (e) {
+        console.error('Error guardant errors de lliçó:', e);
     }
 }
 
@@ -7026,11 +7049,7 @@ function calculatePrecisionRange(gameEntry, startMove, endMove) {
 }
 
 // Analitzar rendiment d'obertures
-function analyzeOpeningPerformance() {
-    const recentGames = gameHistory.slice(-10).filter(g =>
-        g.moves && g.moves.length >= 6
-    );
-
+function analyzeOpeningPerformance(recentGames) {
     if (recentGames.length === 0) {
         return {
             totalGames: 0,
@@ -7109,6 +7128,105 @@ function analyzeOpeningPerformance() {
     return stats;
 }
 
+function buildLessonErrorsFromGames(recentGames) {
+    const categories = {
+        openings: [],
+        middlegame: [],
+        endgame: []
+    };
+
+    recentGames.forEach(game => {
+        if (!Array.isArray(game.severeErrors)) return;
+        game.severeErrors.forEach(err => {
+            const moveNumber = Number(err.moveNumber);
+            if (!moveNumber) return;
+            const phase = moveNumber <= 10
+                ? 'openings'
+                : moveNumber <= 25
+                    ? 'middlegame'
+                    : 'endgame';
+            categories[phase].push({
+                moveNumber,
+                severity: err.severity || 'high',
+                fen: err.fen || null,
+                label: game.label || game.result || '—'
+            });
+        });
+    });
+
+    return categories;
+}
+
+function renderLessonErrors() {
+    const containers = {
+        openings: $('#lesson-openings-content'),
+        middlegame: $('#lesson-middlegame-content'),
+        endgame: $('#lesson-endgame-content')
+    };
+    const counts = {
+        openings: $('#lesson-openings-count'),
+        middlegame: $('#lesson-middlegame-count'),
+        endgame: $('#lesson-endgame-count')
+    };
+
+    Object.values(containers).forEach(container => container.empty());
+
+    const entriesByPhase = { openings: [], middlegame: [], endgame: [] };
+
+    if (currentLessonErrors) {
+        Object.keys(entriesByPhase).forEach(phase => {
+            currentLessonErrors[phase].forEach(err => {
+                entriesByPhase[phase].push({ ...err, lessonNumber: null });
+            });
+        });
+    }
+
+    lessonErrors.forEach(lesson => {
+        const number = lesson.lessonNumber;
+        Object.keys(entriesByPhase).forEach(phase => {
+            const list = lesson.categories?.[phase] || [];
+            list.forEach(err => {
+                entriesByPhase[phase].push({ ...err, lessonNumber: number });
+            });
+        });
+    });
+
+    Object.keys(entriesByPhase).forEach(phase => {
+        const items = entriesByPhase[phase];
+        counts[phase].text(items.length);
+        if (items.length === 0) {
+            containers[phase].append('<div class="bundle-empty">Cap error en aquesta categoria</div>');
+            return;
+        }
+
+        const listHtml = items.map(err => {
+            const severityClass = err.severity === 'med' || err.severity === 'high' || err.severity === 'low'
+                ? err.severity
+                : 'high';
+            const lessonLabel = err.lessonNumber ? `Lliçó ${err.lessonNumber}` : 'Lliçó actual';
+            return `
+                <div class="bundle-item ${severityClass}">
+                    <div>
+                        <strong>${lessonLabel}</strong>
+                        <div class="bundle-meta">Moviment ${err.moveNumber} · ${err.label || '—'}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        containers[phase].append(`<div class="bundle-list">${listHtml}</div>`);
+    });
+
+    $('#lesson-errors-folders .bundle-section-header').off('click').on('click', function() {
+        $(this).closest('.bundle-section').toggleClass('open');
+    });
+}
+
+function updateLessonSaveState() {
+    const hasCurrent = currentLessonErrors && Object.values(currentLessonErrors).some(list => list.length > 0);
+    $('#lesson-save-action').toggle(!!hasCurrent);
+}
+
 // Calcular estadístiques d'una obertura
 function calculateOpeningStats(opening) {
     const total = opening.count;
@@ -7146,9 +7264,15 @@ async function performLessonAnalysis() {
     $('#lesson-loading').show();
     $('#lesson-diagnosis').hide();
     $('#lesson-openings').hide();
+    $('#lesson-severe-errors').hide();
+    $('#lesson-save-action').hide();
     $('#lesson-main-action').hide();
 
-    const openingStats = analyzeOpeningPerformance();
+    const recentGames = gameHistory.slice(-10).filter(g =>
+        g.moves && g.moves.length >= 6
+    );
+
+    const openingStats = analyzeOpeningPerformance(recentGames);
 
     if (openingStats.totalGames === 0) {
         $('#lesson-loading').hide();
@@ -7256,8 +7380,13 @@ async function performLessonAnalysis() {
         precisionDrop
     };
 
+    currentLessonErrors = buildLessonErrorsFromGames(recentGames);
+
     $('#lesson-loading').hide();
     $('#lesson-diagnosis').show();
+    $('#lesson-severe-errors').show();
+    renderLessonErrors();
+    updateLessonSaveState();
 
     // Si l'àrea crítica són obertures, mostrar anàlisi detallat
     if (criticalArea === 'obertures') {
@@ -7601,6 +7730,8 @@ function setupLessonEvents() {
         $('#lesson-diagnosis').hide();
         $('#lesson-openings').hide();
         $('#lesson-repertoire').hide();
+        $('#lesson-severe-errors').hide();
+        $('#lesson-save-action').hide();
         $('#lesson-main-action').show();
     });
 
@@ -7632,6 +7763,29 @@ function setupLessonEvents() {
         const color = $(this).data('color');
         generateOpeningBundles(move, color);
     });
+
+    $('#btn-save-lesson').off('click').on('click', () => {
+        if (!currentLessonErrors) {
+            alert('Encara no hi ha una lliçó per guardar.');
+            return;
+        }
+        const totalCurrent = Object.values(currentLessonErrors).reduce((sum, list) => sum + list.length, 0);
+        if (totalCurrent === 0) {
+            alert('No hi ha errors greus per guardar.');
+            return;
+        }
+        const lessonNumber = lessonErrors.length + 1;
+        lessonErrors.push({
+            lessonNumber,
+            createdAt: new Date().toISOString(),
+            categories: currentLessonErrors
+        });
+        saveLessonErrors();
+        currentLessonErrors = null;
+        renderLessonErrors();
+        updateLessonSaveState();
+        alert(`Lliçó ${lessonNumber} guardada.`);
+    });
 }
 
 // PWA Install functionality
@@ -7662,6 +7816,7 @@ $(document).ready(() => {
     updateDeviceType();
     loadStorage();
     loadPersonalRepertoire();
+    loadLessonErrors();
     if (!isCalibrationActive()) {
         syncEngineEloFromUser();
     }

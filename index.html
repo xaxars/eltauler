@@ -1809,6 +1809,14 @@
             padding: 8px 12px;
         }
 
+        .lesson-phase .bundle-section-header {
+            background: rgba(0,0,0,0.25);
+        }
+
+        .lesson-phase .bundle-section-title {
+            color: var(--text-primary);
+        }
+
         .lesson-repertoire-text {
             white-space: pre-wrap;
             line-height: 1.8;
@@ -2303,6 +2311,47 @@
                 <div class="lesson-main-action" id="lesson-main-action">
                     <button class="btn btn-primary btn-large" id="btn-analyze-lessons">
                         🔍 Analitzar últimes 10 partides
+                    </button>
+                </div>
+
+                <!-- Errors greus -->
+                <div id="lesson-severe-errors" style="display:none;">
+                    <div class="lesson-card">
+                        <div class="lesson-card-header">
+                            <span class="lesson-icon">🚨</span>
+                            <h3>Errors greus</h3>
+                        </div>
+                        <div class="lesson-card-body">
+                            <div class="bundle-folder-list" id="lesson-errors-folders">
+                                <div class="bundle-section lesson-phase" data-phase="openings">
+                                    <div class="bundle-section-header">
+                                        <div class="bundle-section-title">Obertures</div>
+                                        <div class="bundle-section-count"><span id="lesson-openings-count">0</span><span class="bundle-section-caret">▾</span></div>
+                                    </div>
+                                    <div class="bundle-section-content" id="lesson-openings-content"></div>
+                                </div>
+                                <div class="bundle-section lesson-phase" data-phase="middlegame">
+                                    <div class="bundle-section-header">
+                                        <div class="bundle-section-title">Joc mitjà</div>
+                                        <div class="bundle-section-count"><span id="lesson-middlegame-count">0</span><span class="bundle-section-caret">▾</span></div>
+                                    </div>
+                                    <div class="bundle-section-content" id="lesson-middlegame-content"></div>
+                                </div>
+                                <div class="bundle-section lesson-phase" data-phase="endgame">
+                                    <div class="bundle-section-header">
+                                        <div class="bundle-section-title">Finals</div>
+                                        <div class="bundle-section-count"><span id="lesson-endgame-count">0</span><span class="bundle-section-caret">▾</span></div>
+                                    </div>
+                                    <div class="bundle-section-content" id="lesson-endgame-content"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lesson-main-action" id="lesson-save-action" style="display:none;">
+                    <button class="btn btn-secondary btn-large" id="btn-save-lesson">
+                        💾 Guardar lliçó
                     </button>
                 </div>
             </div>
