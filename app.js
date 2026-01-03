@@ -3823,24 +3823,32 @@ function formatGeminiReviewText(text) {
     // Primer, formatem les cometes per a màximes
     let formatted = safe
         .replace(/&quot;([\s\S]*?)&quot;/g, '<em>"$1"</em>')
-        .replace(/"([\s\S]*?)"/g, '<em>"$1"</em>');
+        .replace(/\"([\s\S]*?)\"/g, '<em>"$1"</em>');
     
-    // Patrons per capturar referències a jugades (més flexibles)
+    // Patrons AMPLIATS per capturar més formats de referències a jugades
     const movePatterns = [
-        // "jugada 10 (Nxe5)" - format principal
+        // Formats amb paréntesis: "10. Nxe5", "10 (Nxe5)", etc.
+        /(\d+)\.\s*([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?[+#]?)/gi,
         /jugada\s+(\d+)\s*\(([^)]+)\)/gi,
-        // "a la jugada 10 (Nxe5)"
         /a\s+la\s+jugada\s+(\d+)\s*\(([^)]+)\)/gi,
-        // "jugada número 10 (Nxe5)"
         /jugada\s+n[úu]mero\s+(\d+)\s*\(([^)]+)\)/gi,
-        // "moviment 10 (Nxe5)"
         /moviment\s+(\d+)\s*\(([^)]+)\)/gi,
+        /al\s+moviment\s+(\d+)\s*\(([^)]+)\)/gi,
+        // Formats sense paréntesis
+        /jugada\s+(\d+):\s*([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?[+#]?)/gi,
+        /move\s+(\d+)\s*\(([^)]+)\)/gi,
     ];
     
     // Apliquem cada patró
     movePatterns.forEach(pattern => {
         formatted = formatted.replace(pattern, (match, moveNumber, san) => {
-            const cleanSan = san.trim();
+            const cleanSan = san.trim()
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'");
+            
             return `<a href="#" class="gemini-move-link" data-move-number="${moveNumber}" data-san="${cleanSan}">${match}</a>`;
         });
     });

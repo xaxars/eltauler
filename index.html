@@ -997,9 +997,12 @@
             grid-template-columns: 1fr;
             gap: 16px;
         }
-        body.device-desktop .history-layout,
         body.device-tablet .history-layout {
             grid-template-columns: 1fr 1fr;
+        }
+        body.device-desktop .history-layout {
+            grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr) minmax(240px, 1fr);
+            align-items: start;
         }
         .history-list {
             display: flex;
@@ -1008,6 +1011,12 @@
             max-height: 360px;
             overflow-y: auto;
             padding-right: 4px;
+        }
+        body.device-desktop .history-list {
+            max-height: none;
+            overflow: visible;
+            padding-right: 0;
+            grid-column: 1;
         }
         .history-item {
             display: flex;
@@ -1059,26 +1068,44 @@
             border-color: #cfcfcf;
         }
         body.device-desktop .history-detail {
-            display: grid;
-            grid-template-columns: 1fr 1.1fr;
-            grid-template-rows: auto auto auto auto auto;
-            gap: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            grid-column: 2 / 4;
         }
-        body.device-desktop .history-detail-header {
-            grid-column: 1 / -1;
+        body.device-desktop .history-detail-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(240px, 0.9fr);
+            gap: 12px;
+            align-items: start;
+        }
+        body.device-desktop .history-side {
+            position: sticky;
+            top: 16px;
+            align-self: start;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         body.device-desktop .history-review {
-            grid-column: 1;
-            grid-row: 2 / span 4;
-            align-self: start;
+            align-self: stretch;
+            max-height: none;
+            display: flex;
+            flex-direction: column;
+        }
+        body.device-desktop .history-review-content {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 240px;
+        }
+
+        /* Mantenir límit d'alçada en mòbil/tablet */
+        body.device-mobile .history-review,
+        body.device-tablet .history-review {
+            max-height: 500px;
         }
         body.device-desktop .history-board {
-            grid-column: 2;
-        }
-        body.device-desktop .history-controls,
-        body.device-desktop .history-actions,
-        body.device-desktop .history-progress {
-            grid-column: 2;
+            width: 100%;
         }
         .history-detail-header {
             display: flex;
@@ -1583,11 +1610,22 @@
         }
         body.device-mobile .history-detail-header { order: 1; }
         body.device-mobile #history-breakdown { order: 2; }
-        body.device-mobile .history-controls { order: 3; margin-bottom: 10px; }
-        body.device-mobile .history-board { order: 4; }
-        body.device-mobile .history-actions { order: 5; }
-        body.device-mobile .history-review { order: 6; }
-        body.device-mobile .history-progress { order: 7; }
+        body.device-mobile .history-detail-body {
+            order: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        body.device-mobile .history-side {
+            order: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        body.device-mobile .history-controls { order: 1; margin-bottom: 10px; }
+        body.device-mobile .history-board { order: 2; }
+        body.device-mobile .history-actions { order: 3; }
+        body.device-mobile .history-progress { order: 4; }
+        body.device-mobile .history-review { order: 2; }
     </style>
 </head>
 <body>
@@ -1821,23 +1859,27 @@
                             <div class="history-detail-meta">Precisió: <strong id="history-precision">—</strong></div>
                         </div>
                         <div class="review-legend" id="history-breakdown"></div>
-                        <div class="history-board">
-                            <div id="history-board"></div>
+                        <div class="history-detail-body">
+                            <div class="history-review">
+                                <div class="history-review-title">Historial revisió</div>
+                                <div class="history-review-content" id="history-review-content">—</div>
+                            </div>
+                            <div class="history-side">
+                                <div class="history-board">
+                                    <div id="history-board"></div>
+                                </div>
+                                <div class="history-controls">
+                                    <button class="btn btn-secondary" id="history-prev">⏮️ Endarrere</button>
+                                    <button class="btn btn-primary" id="history-play">▶️ Play</button>
+                                    <button class="btn btn-secondary" id="history-pause">⏸️ Pausa</button>
+                                    <button class="btn btn-secondary" id="history-next">⏭️ Endavant</button>
+                                </div>
+                                <div class="history-actions">
+                                    <button class="btn btn-secondary" id="history-generate-review">✨ Generar ressenya</button>
+                                </div>
+                                <div class="history-progress" id="history-progress">0/0</div>
+                            </div>
                         </div>
-                        <div class="history-controls">
-                            <button class="btn btn-secondary" id="history-prev">⏮️ Endarrere</button>
-                            <button class="btn btn-primary" id="history-play">▶️ Play</button>
-                            <button class="btn btn-secondary" id="history-pause">⏸️ Pausa</button>
-                            <button class="btn btn-secondary" id="history-next">⏭️ Endavant</button>
-                        </div>
-                        <div class="history-actions">
-                            <button class="btn btn-secondary" id="history-generate-review">✨ Generar ressenya</button>
-                        </div>
-                        <div class="history-review">
-                            <div class="history-review-title">Historial revisió</div>
-                            <div class="history-review-content" id="history-review-content">—</div>
-                        </div>
-                        <div class="history-progress" id="history-progress">0/0</div>
                     </div>
                 </div>
             </div>
