@@ -25,6 +25,7 @@ let reviewOpenDelayTimer = null;
 let gameHistory = [];
 let historyBoard = null;
 let historyReplay = null;
+let lastBundleGeminiHint = null
 let tvBoard = null;
 let tvReplay = null;
 let tvJeroglyphicsActive = false;
@@ -127,6 +128,14 @@ let currentBundleSeverity = null;
 let currentBundleSource = null;
 let playerColor = 'w';
 let isRandomBundleSession = false;
+let bundleSequenceStep = 1;
+let bundleSequenceStartFen = null;
+let bundleStepStartFen = null;
+let bundleStrictPvLine = [];
+let bundleStrictPvDepth = 0;
+let bundleFixedSequence = null;
+let bundleAutoReplyPending = false;
+let bundleGeminiHintPending = false;
 const LEAGUE_QUOTES = [
     "“El millor moment per jugar és ara.”",
     "“La sort somriu als valents.”",
@@ -483,6 +492,7 @@ function applyTvJeroglyphicsMode(enabled, options = {}) {
 let isBundleStrictAnalysis = false;
 let bundleBestMove = null;
 let bundlePvMoves = {};
+let bundlePvLines = {};
 let lastHumanMoveUci = null;
 
 let dragGuardBound = false;
@@ -2208,6 +2218,20 @@ function updateGeminiSettingsUI() {
         input.placeholder = 'Enganxa la clau';
         status.textContent = 'No configurada';
     }
+    updateBundleHintButtons();
+}
+
+function updateBundleHintButtons() {
+    const brainBtn = document.getElementById('btn-brain-hint');
+    const hintBtn = document.getElementById('btn-hint');
+    if (!brainBtn || !hintBtn) return;
+    
+    const visible = blunderMode && bundleSequenceStep <= 2;
+    brainBtn.style.display = visible ? 'inline-flex' : 'none';
+    hintBtn.style.display = visible ? 'inline-flex' : 'none';
+    
+    brainBtn.disabled = !visible || !geminiApiKey || bundleGeminiHintPending;
+    hintBtn.disabled = !visible || !stockfish || isAnalyzingHint;
 }
 
 function saveGeminiApiKey(rawKey) {
@@ -2749,6 +2773,182 @@ function evaluateKingSafety(board, whiteKing, blackKing, castling) {
     }
 
     return safety;
+}
+
+async function prepareBundleSequence(fen) {
+    // Validació inicial més robusta
+    if (!stockfish) {
+        console.error('[Bundle] Stockfish no existeix');
+        ensureStockfish();
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    if (!stockfish) {
+        console.error('[Bundle] No es pot inicialitzar Stockfish');
+        return null;
+    }
+    
+    // Esperar que Stockfish estigui llest
+    let waitCount = 0;
+    while (!stockfishReady && waitCount < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+    }
+    
+    if (!stockfishReady) {
+        console.error('[Bundle] Stockfish no està llest després d\'esperar');
+        return null;
+    }
+    
+    try {
+        // Neteja inicial més agressiva
+        stockfish.postMessage('stop');
+        stockfish.postMessage('setoption name MultiPV value 1');
+        await new Promise(resolve => setTimeout(resolve, 300)); // Temps augmentat
+        
+        console.log('[Bundle] Iniciant preparació seqüència per FEN:', fen);
+        
+        // 1. Analitzar posició inicial (Pas 1)
+        console.log('[Bundle] Pas 1: Analitzant posició inicial...');
+        const step1Analysis = await analyzePositionEnriched(stockfish, fen, 15, 2);
+        
+        if (!step1Analysis || !step1Analysis.bestMove || !step1Analysis.bestMove.move) {
+            console.error('[Bundle] Pas 1 fallit: no hi ha bestMove', step1Analysis);
+            alert('Error: No es pot analitzar la posició inicial. Torna-ho a provar.');
+            return null;
+        }
+        
+        const playerMove1 = step1Analysis.bestMove.move;
+        console.log('[Bundle] Pas 1 - Millor jugada:', playerMove1);
+        
+        const playerMove1San = uciToSan(fen, playerMove1);
+        const playerMove1Pv = step1Analysis.bestMove.pv || [];
+        const playerMove1Eval = step1Analysis.bestMove.eval || 0;
+        
+        // 2. Aplicar la millor jugada del jugador
+        const tempGame1 = new Chess(fen);
+        const move1 = tempGame1.move({
+            from: playerMove1.slice(0, 2),
+            to: playerMove1.slice(2, 4),
+            promotion: playerMove1.length > 4 ? playerMove1[4] : undefined
+        });
+        
+        if (!move1) {
+            console.error('[Bundle] No es pot aplicar jugada 1:', playerMove1);
+            alert('Error: Jugada no vàlida. Prova un altre error.');
+            return null;
+        }
+        
+        const afterPlayerFen = tempGame1.fen();
+        console.log('[Bundle] Després jugada 1, FEN:', afterPlayerFen);
+        
+        // Pausa més llarga entre anàlisis
+        await new Promise(resolve => setTimeout(resolve, 400)); // Augmentat
+        
+        // 3. Calcular millor resposta de l'oponent
+        console.log('[Bundle] Pas 2: Analitzant resposta oponent...');
+        const opponentAnalysis = await analyzePositionEnriched(stockfish, afterPlayerFen, 15, 1);
+        
+        if (!opponentAnalysis || !opponentAnalysis.bestMove || !opponentAnalysis.bestMove.move) {
+            console.error('[Bundle] Pas 2 fallit: no hi ha bestMove oponent', opponentAnalysis);
+            alert('Error: No es pot calcular la resposta. Prova un altre error.');
+            return null;
+        }
+        
+        const opponentMove = opponentAnalysis.bestMove.move;
+        console.log('[Bundle] Pas 2 - Resposta oponent:', opponentMove);
+        
+        const opponentMoveSan = uciToSan(afterPlayerFen, opponentMove);
+        const opponentMoveEval = opponentAnalysis.bestMove.eval || 0;
+        
+        // 4. Aplicar resposta de l'oponent
+        const tempGame2 = new Chess(afterPlayerFen);
+        const move2 = tempGame2.move({
+            from: opponentMove.slice(0, 2),
+            to: opponentMove.slice(2, 4),
+            promotion: opponentMove.length > 4 ? opponentMove[4] : undefined
+        });
+        
+        if (!move2) {
+            console.error('[Bundle] No es pot aplicar jugada oponent:', opponentMove);
+            alert('Error: Resposta no vàlida. Prova un altre error.');
+            return null;
+        }
+        
+        const afterOpponentFen = tempGame2.fen();
+        console.log('[Bundle] Després resposta oponent, FEN:', afterOpponentFen);
+        
+        // Pausa abans de l'anàlisi final
+        await new Promise(resolve => setTimeout(resolve, 400)); // Augmentat
+        
+        // 5. Calcular millor segona jugada del jugador (Pas 3)
+        console.log('[Bundle] Pas 3: Analitzant segona jugada jugador...');
+        const step2Analysis = await analyzePositionEnriched(stockfish, afterOpponentFen, 15, 2);
+        
+        if (!step2Analysis || !step2Analysis.bestMove || !step2Analysis.bestMove.move) {
+            console.error('[Bundle] Pas 3 fallit: no hi ha bestMove pas 2', step2Analysis);
+            alert('Error: No es pot calcular la segona jugada. Prova un altre error.');
+            return null;
+        }
+        
+        const playerMove2 = step2Analysis.bestMove.move;
+        console.log('[Bundle] Pas 3 - Segona jugada:', playerMove2);
+        
+        const playerMove2San = uciToSan(afterOpponentFen, playerMove2);
+        const playerMove2Pv = step2Analysis.bestMove.pv || [];
+        const playerMove2Eval = step2Analysis.bestMove.eval || 0;
+        
+        // 6. Analitzar context posicional de cada pas
+        const positionStep1 = parseFenPosition(fen);
+        const positionStep2 = parseFenPosition(afterOpponentFen);
+        const threatsStep1 = analyzePvThreats(fen, playerMove1Pv);
+        const threatsStep2 = analyzePvThreats(afterOpponentFen, playerMove2Pv);
+        
+        console.log('[Bundle] Seqüència completa preparada:', 
+            [playerMove1San, opponentMoveSan, playerMove2San]);
+        
+        // 7. Retornar seqüència completa i fixa
+        return {
+            initialFen: fen,
+            
+            step1: {
+                fen: fen,
+                playerMove: playerMove1,
+                playerMoveSan: playerMove1San,
+                playerMovePv: playerMove1Pv,
+                evalBefore: playerMove1Eval,
+                alternatives: step1Analysis.alternatives || [],
+                position: positionStep1,
+                threats: threatsStep1
+            },
+            
+            opponentMove: {
+                fen: afterPlayerFen,
+                move: opponentMove,
+                moveSan: opponentMoveSan,
+                eval: opponentMoveEval
+            },
+            
+            step2: {
+                fen: afterOpponentFen,
+                playerMove: playerMove2,
+                playerMoveSan: playerMove2San,
+                playerMovePv: playerMove2Pv,
+                evalBefore: playerMove2Eval,
+                alternatives: step2Analysis.alternatives || [],
+                position: positionStep2,
+                threats: threatsStep2
+            },
+            
+            fullSequence: [playerMove1, opponentMove, playerMove2],
+            fullSequenceSan: [playerMove1San, opponentMoveSan, playerMove2San]
+        };
+        
+    } catch (error) {
+        console.error('[Bundle] Error preparant seqüència:', error);
+        alert('Error inesperat preparant l\'exercici. Torna-ho a provar.');
+        return null;
+    }
 }
 
 function analyzePvThreats(fen, pv) {
@@ -3768,7 +3968,10 @@ function getSevereErrors(entries) {
             evalAfter: entry.evalAfter ?? null,
             swing: entry.swing || null,
             isCapture: !!entry.isCapture,
-            isCheck: !!entry.isCheck
+            isCheck: !!entry.isCheck,
+            depth: entry.depth || null,
+            alternatives: entry.alternatives || [],
+            quality: entry.quality || 'blunder'
         }));
 }
 
@@ -3781,6 +3984,242 @@ function getEntrySevereErrors(entry) {
         return getSevereErrors(entry.review);
     }
     return [];
+}
+
+function buildGeminiBundleHintPrompt(step, context = {}) {
+    const stepNumber = step === 2 ? 2 : 1;
+    const sentenceCount = stepNumber === 1 ? 2 : 1;
+    const sentenceText = sentenceCount === 1 ? '1 frase' : '2 frases';
+    const maxChars = 600;
+    
+    // Construir context posicional
+    let contextText = '';
+    if (context.fen) {
+        contextText += `\nPOSICIÓ (FEN): ${context.fen}`;
+    }
+    if (context.playerMove) {
+        contextText += `\nJugada feta: ${context.playerMove}`;
+    }
+    if (context.bestMove) {
+        contextText += `\nMillor jugada: ${context.bestMove}`;
+    }
+    if (context.bestMovePv && context.bestMovePv.length) {
+        contextText += `\nVariant principal: ${context.bestMovePv.slice(0, 4).join(' ')}`;
+    }
+    if (context.severity) {
+        const severityLabels = { low: 'lleu', med: 'mitjà', high: 'greu' };
+        contextText += `\nGravetat: Error ${severityLabels[context.severity] || 'desconegut'}`;
+    }
+    
+    const extraStep1 = stepNumber === 1
+        ? `\n\nPer al pas 1, genera dues frases màxima:\n- La primera frase ha d'apuntar a un concepte tàctic o estratègic general aplicable a aquesta posició.\n- La segona frase ha d'orientar subtilment cap a la peça o zona clau sense revelar directament la jugada.\n`
+        : '';
+    
+    return `Ets un entrenador d'escacs expert. Analitza aquesta situació i genera ${sentenceText} en català amb màximes o principis d'escacs per ajudar a trobar la millor jugada del pas ${stepNumber}.
+${contextText}
+
+REGLES IMPERATIVES:
+- Cada frase ha de tenir mínim 20 i 250 màxim caràcters 
+- Les màximes han de ser específiques i accionables, no genèriques
+- NO facis servir frases de menys de 5 paraules
+- NO repeteixis conceptes entre frases
+- NO facis servir cometes, emojis, ni enumeracions
+- Centra't en conceptes tàctics concrets: forquilles, claus, atacs dobles, debilitats de peó, peces sobrecarregades, línies obertes, control del centre
+- Les màximes han de guiar sense revelar directament la solució
+${extraStep1}
+BONS EXEMPLES de màximes per al pas 1:
+Les peces actives sempre busquen caselles que controlin múltiples objectius simultàniament
+Identifica les peces enemigues que defensen múltiples punts i sobrecarrega-les
+Quan el rei està al centre les columnes obertes són autopistes d'atac
+
+BONS EXEMPLES de màximes per al pas 2:
+Després d'una tàctica guanyadora cal consolidar amb jugades naturals de desenvolupament
+Mantén la pressió sobre els punts febles abans que l'adversari pugui reagrupar-se
+
+Genera ara ${sentenceText} específica${sentenceCount === 1 ? '' : 's'} per aquesta posició:`;
+}
+
+function buildBundleGeminiPromptWithFixedSequence(step) {
+    if (!bundleFixedSequence) return null;
+    
+    const stepData = step === 1 ? bundleFixedSequence.step1 : bundleFixedSequence.step2;
+    
+    if (step === 1) {
+        return `Ets un mestre d'escacs que aplica els principis de l'Art de la Guerra de Sun Tzu als escacs.
+
+SEQÜÈNCIA TÀCTICA COMPLETA (no revelar):
+1. Jugador: ${bundleFixedSequence.fullSequenceSan[0]}
+2. Oponent: ${bundleFixedSequence.fullSequenceSan[1]}
+3. Jugador: ${bundleFixedSequence.fullSequenceSan[2]}
+
+CONTEXT DEL PRIMER PAS:
+Posició (FEN): ${stepData.fen}
+Millor jugada: ${stepData.playerMoveSan}
+Balanç material: ${stepData.position.material.balance}
+Temes tàctics: ${stepData.threats.themes.join(', ') || 'Cap'}
+
+INSTRUCCIONS:
+Genera exactament 2 màximes o principis d'escacs inspirats en l'Art de la Guerra:
+
+1. Primera màxima: Visió estratègica general que engloba els dos moviments de la seqüència sencera
+2. Segona màxima: Principi tàctic específic pel primer moviment concret
+
+REGLES IMPERATIVES:
+- Només les màximes, res més
+- Cada màxima entre 20-200 caràcters
+- Inspirades en l'Art de la Guerra de Sun Tzu
+- NO revelar directament la solució
+- NO numerar les màximes
+- NO afegir comentaris explicatius
+
+FORMAT DE SORTIDA:
+Màxima general
+Màxima específica`;
+    } else {
+        return `Ets un mestre d'escacs que aplica els principis de l'Art de la Guerra de Sun Tzu als escacs.
+
+CONTEXT DEL SEGON PAS:
+Posició (FEN): ${stepData.fen}
+Millor jugada: ${stepData.playerMoveSan}
+Balanç material: ${stepData.position.material.balance}
+Temes tàctics: ${stepData.threats.themes.join(', ') || 'Cap'}
+
+INSTRUCCIONS:
+Genera exactament 1 màxima o principi d'escacs inspirat en l'Art de la Guerra per al segon moviment de la seqüència.
+
+REGLES IMPERATIVES:
+- Només la màxima, res més
+- Entre 20-200 caràcters
+- Inspirada en l'Art de la Guerra de Sun Tzu
+- NO revelar directament la solució
+- NO numerar
+- NO afegir comentaris explicatius
+
+FORMAT DE SORTIDA:
+Màxima específica`;
+    }
+}
+
+async function requestGeminiBundleHint() {
+    if (!blunderMode || !currentBundleFen) return;
+    if (!geminiApiKey) {
+        const statusEl = $('#status');
+        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px; line-height:1.5;">⚠️ Configura la clau de Gemini a Estadístiques → Configuració per utilitzar aquesta pista.</div>');
+        return;
+    }
+    if (bundleGeminiHintPending) return;
+    
+    bundleGeminiHintPending = true;
+    updateBundleHintButtons();
+    
+    const statusEl = $('#status');
+    statusEl.html('<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">🧠 Generant màxima d\'escacs...</div>');
+    
+    let prompt;
+    if (bundleFixedSequence) {
+        prompt = buildBundleGeminiPromptWithFixedSequence(bundleSequenceStep);
+    } else {
+        const errorContext = {};
+        let currentError = savedErrors.find(e => e.fen === currentBundleFen);
+
+        if (!currentError) {
+            for (const entry of gameHistory) {
+                if (entry.severeErrors && Array.isArray(entry.severeErrors)) {
+                    currentError = entry.severeErrors.find(e => e.fen === currentBundleFen);
+                    if (currentError) break;
+                }
+            }
+        }
+
+        if (currentError) {
+            errorContext.fen = currentError.fen;
+            errorContext.bestMove = currentError.bestMove;
+            errorContext.playerMove = currentError.playerMove;
+            errorContext.severity = currentError.severity;
+            errorContext.bestMovePv = currentError.bestMovePv || [];
+        } else {
+            errorContext.fen = currentBundleFen;
+        }
+
+        const step = bundleSequenceStep === 2 ? 2 : 1;
+        prompt = buildGeminiBundleHintPrompt(step, errorContext);
+    }
+    
+    if (!prompt) {
+        bundleGeminiHintPending = false;
+        updateBundleHintButtons();
+        return;
+    }
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.85,
+                    maxOutputTokens: 2000,
+                    topP: 0.95,
+                    topK: 40
+                }
+            })
+        });
+        
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error('[Gemini] Error response:', response.status, errorBody);
+            throw new Error(`Gemini error ${response.status}: ${errorBody}`);
+        }
+        
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
+        if (!text) throw new Error('Resposta buida de Gemini');
+        
+        const lines = text.split('\n').filter(l => l.trim());
+        const validLines = lines.filter(line => {
+            const words = line.trim().split(/\s+/).length;
+            return words >= 5;
+        });
+        
+        if (validLines.length === 0) {
+            throw new Error('Respostes massa curtes');
+        }
+              
+        const MAX_GEMINI_HINT_CHARS = 350;
+        let remainingChars = MAX_GEMINI_HINT_CHARS;
+        const trimmedLines = [];
+        for (const line of validLines) {
+            if (remainingChars <= 0) break;
+            let trimmedLine = line.trim();
+            if (trimmedLine.length > remainingChars) {
+                const sliceLength = Math.max(remainingChars - 1, 0);
+                trimmedLine = `${trimmedLine.slice(0, sliceLength).trim()}…`.trim();
+            }
+            trimmedLines.push(trimmedLine);
+            remainingChars -= trimmedLine.length;
+        }
+        
+        let html = '<div style="padding:12px; background:rgba(100,150,255,0.12); border-left:3px solid #6495ed; border-radius:8px; line-height:1.6;">';
+        html += '<div style="font-weight:600; color:var(--accent-gold); margin-bottom:6px;">💡 Principis d\'escacs:</div>';
+        trimmedLines.forEach(line => {
+            html += `<div style="font-style:italic; margin:4px 0;">${line.trim()}</div>`;
+        });
+        html += '</div>';
+        
+        // CANVI: Guardar el missatge generat
+        lastBundleGeminiHint = html;
+        statusEl.html(html);
+        
+    } catch (err) {
+        console.error(err);
+        statusEl.html('<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut generar la màxima. Torna-ho a provar.</div>');
+    } finally {
+        bundleGeminiHintPending = false;
+        updateBundleHintButtons();
+    }
 }
 
 function buildGeminiReviewPrompt(entry, severeErrors) {
@@ -4676,7 +5115,8 @@ function showHistoryReview(entry) {
             fen: err.fen,
             severity: err.severity,
             bestMove: err.bestMove || null,
-            playerMove: err.playerMove || null
+            playerMove: err.playerMove || null,
+            bestMovePv: err.bestMovePv || []  // ← AFEGIR AQUEST CAMP
         }))
         : [];
     const msg = entry.result || 'Partida';
@@ -4702,9 +5142,10 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
             fen: err.fen,
             severity: err.severity,
             bestMove: err.bestMove || null,
-            playerMove: err.playerMove || null
+            playerMove: err.playerMove || null,
+            bestMovePv: err.bestMovePv || []
         })),
-        review: currentReview.slice(),
+        review: [], // ← BUIDAT: ja no cal guardar review completa
         severeErrors: Array.isArray(options.severeErrors) ? options.severeErrors : [],
         geminiReview: options.geminiReview || null,
         playerColor: playerColor,
@@ -4712,19 +5153,8 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
         pgn: game.pgn()
     };
     gameHistory.push(entry);
-    if (gameHistory.length > 60) gameHistory = gameHistory.slice(-60);
-    const reviewEntries = gameHistory.filter(item => Array.isArray(item.review) && item.review.length);
-    if (reviewEntries.length > 30) {
-        const overflow = reviewEntries.length - 30;
-        let cleared = 0;
-        for (const item of gameHistory) {
-            if (cleared >= overflow) break;
-            if (Array.isArray(item.review) && item.review.length) {
-                item.review = [];
-                cleared++;
-            }
-        }
-    }
+    if (gameHistory.length > 10) gameHistory = gameHistory.slice(-10);
+    // Bloc de neteja de reviews eliminat
 }
 
 function checkShareSupport() {
@@ -4906,6 +5336,10 @@ function setupEvents() {
         stockfish.postMessage('go depth 15');
     });
 
+    $('#btn-brain-hint').click(() => {
+        void requestGeminiBundleHint();
+    });
+
     $('#btn-smart-share').click(async () => {
    const data = buildBackupData();
         const filename = `eltauler_backup_${totalStars}stars.json`;
@@ -5024,6 +5458,8 @@ function setupEvents() {
     });
 
     const showResignModal = () => {
+        // No permetre rendir-se si el joc ja ha acabat
+        if (!game || game.game_over()) return;
         $('#resign-modal').css('display', 'flex');
     };
 
@@ -5250,10 +5686,11 @@ function promptMatchErrorNext() {
     }
 }
 
-function startGame(isBundle, fen = null) {
+async function startGame(isBundle, fen = null) {  // ← AFEGIR async
     currentReview = [];
     lastReviewSnapshot = null;
     setResultIndicator(null);
+    $('#btn-resign').prop('disabled', false);
     const checkmateImage = $('#checkmate-image');
     if (checkmateImage.length) checkmateImage.hide();
         if (!isBundle) {
@@ -5276,13 +5713,38 @@ function startGame(isBundle, fen = null) {
     $('#calibration-result-screen').hide();
     $('#game-screen').show();
     
-    blunderMode = isBundle; 
+blunderMode = isBundle; 
     isCalibrationGame = isCalibrationActive() && !isBundle;
     currentBundleFen = fen;
+    
+    // ✅ CALCULAR SEQÜÈNCIA FIXA PER BUNDLES
+    bundleFixedSequence = null;
+    if (isBundle && fen) {
+        $('#status').text("Preparant exercici...").css('color', 'var(--accent-cream)');
+        bundleFixedSequence = await prepareBundleSequence(fen);
+        
+        if (!bundleFixedSequence) {
+            alert("No s'ha pogut preparar l'exercici. Es retornarà al menú.");
+            returnToMainMenuImmediate();
+            return;
+        }
+        
+        // Guardar seqüència per validació
+        bundleStrictPvLine = bundleFixedSequence.fullSequence;
+    }
+    
     lastHumanMoveUci = null;
     isBundleStrictAnalysis = false;
     bundleBestMove = null;
     bundlePvMoves = {};
+    bundlePvLines = {};
+    bundleStrictPvLine = [];
+    bundleStrictPvDepth = 0;
+    bundleSequenceStep = 1;
+    bundleSequenceStartFen = fen || null;
+    bundleStepStartFen = fen || null;
+    bundleAutoReplyPending = false;
+    bundleGeminiHintPending = false;
     if (isBundle) { bundleAcceptMode = loadBundleAcceptMode(); }
 
     totalPlayerMoves = 0; 
@@ -5377,6 +5839,19 @@ function startGame(isBundle, fen = null) {
     $('.square-55d63').removeClass('highlight-hint');
     clearEngineMoveHighlights();
     updateStatus();
+    updateBundleHintButtons();
+    
+    // Forçar actualització visual després de 100ms
+    setTimeout(() => {
+        updateBundleHintButtons();
+        if (blunderMode) {
+            const statusEl = $('#status');
+            const msg = bundleSequenceStep === 1 
+                ? 'Pas 1 de 2: Troba la millor jugada'
+                : 'Pas 2 de 2: Completa la seqüència';
+            statusEl.text(msg);
+        }
+    }, 100);
     
     if (playerColor !== game.turn()) {
         pendingEngineFirstMove = true;
@@ -5452,8 +5927,9 @@ function chooseFallbackMove(fallbackMove) {
 function analyzeMove() {
     if (!stockfish && !ensureStockfish()) { setTimeout(makeEngineMove, 300); return; }
 
-    if (blunderMode && currentBundleFen && (bundleAcceptMode === 'top1' || bundleAcceptMode === 'top2')) {
-        const cached = bundleAnswerCache.get(currentBundleFen);
+    if (blunderMode && (bundleAcceptMode === 'top1' || bundleAcceptMode === 'top2')) {
+        const bundleKey = lastPosition || currentBundleFen;
+        const cached = bundleKey ? bundleAnswerCache.get(bundleKey) : null;
         if (cached && cached.mode === bundleAcceptMode) {
             const hasTop1 = cached.mode === 'top1' && cached.bestMove;
             const hasTop2 = cached.mode === 'top2' && cached.pvMoves && (cached.pvMoves['1'] || cached.pvMoves['2']);
@@ -5465,6 +5941,9 @@ function analyzeMove() {
         isBundleStrictAnalysis = true;
         bundlePvMoves = {};
         bundleBestMove = null;
+        bundlePvLines = {};
+        bundleStrictPvLine = [];
+        bundleStrictPvDepth = 0;
         const multiPvValue = bundleAcceptMode === 'top2' ? 2 : 1;
         stockfish.postMessage(`setoption name MultiPV value ${multiPvValue}`);
         stockfish.postMessage(`position fen ${lastPosition}`);
@@ -5588,6 +6067,17 @@ function handleEngineMessage(rawMsg) {
         return;
     }
 
+    if (bundleAutoReplyPending && msg.indexOf('bestmove') !== -1) {
+        bundleAutoReplyPending = false;
+        try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
+        if (match) {
+            const replyMove = match[1] + match[2] + (match[3] || '');
+            applyBundleAutoReply(replyMove);
+        }
+        return;
+    }
+
     if (tvJeroglyphicsAnalyzing) {
         if (msg.indexOf('bestmove') !== -1) {
             tvJeroglyphicsAnalyzing = false;
@@ -5647,6 +6137,20 @@ function handleEngineMessage(rawMsg) {
     
     // Validació estricta en mode Bundle
     if (isBundleStrictAnalysis) {
+        if (msg.startsWith('info') && msg.indexOf(' pv ') !== -1) {
+            const parsedInfo = parseUciInfo(msg);
+            if (parsedInfo && (parsedInfo.multipv === 1 || parsedInfo.multipv === 2)) {
+                const depth = parsedInfo.depth || 0;
+                const existingDepth = bundlePvLines[parsedInfo.multipv]?.depth || 0;
+                if (depth >= existingDepth) {
+                    bundlePvLines[parsedInfo.multipv] = { depth, pv: parsedInfo.pv || [] };
+                    if (parsedInfo.multipv === 1) {
+                        bundleStrictPvLine = parsedInfo.pv || [];
+                        bundleStrictPvDepth = depth;
+                    }
+                }
+            }
+        }
         if (bundleAcceptMode === 'top2') {
             const pvMatch = msg.match(/multipv\s+([12]).*?\spv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
             if (pvMatch) {
@@ -5661,13 +6165,13 @@ function handleEngineMessage(rawMsg) {
             if (bundleAcceptMode === 'top1') {
                 const bestMatch = msg.match(/bestmove\s([a-h][1-8][a-h][1-8][qrbn]?)/);
                 bundleBestMove = bestMatch ? bestMatch[1] : null;
-                cacheBundleAnswer(currentBundleFen, bundleAcceptMode, bundleBestMove, {});
-                evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: bundleBestMove, pvMoves: {} });
+                cacheBundleAnswer(lastPosition, bundleAcceptMode, bundleBestMove, {}, bundleStrictPvLine, null);
+                evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: bundleBestMove, pvMoves: {}, pvLine: bundleStrictPvLine });
                 return;
             }
 
-            cacheBundleAnswer(currentBundleFen, bundleAcceptMode, null, { ...bundlePvMoves });
-            evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: null, pvMoves: { ...bundlePvMoves } });
+            cacheBundleAnswer(lastPosition, bundleAcceptMode, null, { ...bundlePvMoves }, null, { ...bundlePvLines });
+            evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: null, pvMoves: { ...bundlePvMoves }, pvLines: { ...bundlePvLines } });
         }
         return;
     }
@@ -5792,8 +6296,42 @@ function handleEngineMessage(rawMsg) {
     }
 }
 
+function selectBundlePvLineForMove(bundleData, playedMove) {
+    if (!bundleData) return [];
+    if (Array.isArray(bundleData.pvLine) && bundleData.pvLine.length) {
+        return bundleData.pvLine;
+    }
+    const pvLines = bundleData.pvLines || {};
+    const candidates = Object.values(pvLines)
+        .map(entry => entry?.pv || entry)
+        .filter(line => Array.isArray(line) && line.length);
+    const match = candidates.find(line => line[0] === playedMove);
+    return match || (candidates[0] || []);
+}
+
+function applyBundleAutoReply(moveUci) {
+    if (!moveUci) return;
+    const fromSq = moveUci.substring(0, 2);
+    const toSq = moveUci.substring(2, 4);
+    const promotion = moveUci.length > 4 ? moveUci[4] : 'q';
+    game.move({ from: fromSq, to: toSq, promotion });
+    board.position(game.fen());
+    highlightEngineMove(fromSq, toSq);
+    bundleStepStartFen = game.fen();
+    lastHumanMoveUci = null;
+    updateStatus();
+}
+
+function requestBundleAutoReply() {
+    if (!stockfish && !ensureStockfish()) return;
+    bundleAutoReplyPending = true;
+    try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+    stockfish.postMessage(`position fen ${game.fen()}`);
+    stockfish.postMessage('go depth 10');
+}
+
 function resetBundleToStartPosition() {
-    const fen = currentBundleFen || lastPosition || null;
+    const fen = bundleStepStartFen || currentBundleFen || lastPosition || null;
     if (!fen) return;
     try { game.load(fen); } catch (e) { return; }
     board.position(game.fen());
@@ -5805,16 +6343,85 @@ function resetBundleToStartPosition() {
     clearEngineMoveHighlights();
     clearTapSelection();
     $('#blunder-alert').hide();
-    $('#status').text("Tornar a intentar");
+    
+    // CANVI: Restaurar el missatge de Gemini si existeix
+    const statusEl = $('#status');
+    if (lastBundleGeminiHint) {
+        statusEl.html(lastBundleGeminiHint);
+    } else {
+        statusEl.text("Torna a intentar-ho");
+    }
 }
 
-function cacheBundleAnswer(fen, mode, bestMove, pvMoves) {
+function cacheBundleAnswer(fen, mode, bestMove, pvMoves, pvLine = null, pvLines = null) {
     if (!fen || !mode) return;
-    bundleAnswerCache.set(fen, { mode, bestMove, pvMoves });
+    bundleAnswerCache.set(fen, { mode, bestMove, pvMoves, pvLine, pvLines });
 }
 
 function evaluateBundleAttempt(bundleData) {
     const played = lastHumanMoveUci || '';
+    
+    // ✅ SI HI HA SEQÜÈNCIA FIXA, USAR-LA
+    if (bundleFixedSequence) {
+        const step = bundleSequenceStep;
+        
+        // Validar segons el pas actual
+        const expectedMove = step === 1 
+            ? bundleFixedSequence.step1.playerMove 
+            : bundleFixedSequence.step2.playerMove;
+        
+        const alternatives = step === 1
+            ? bundleFixedSequence.step1.alternatives
+            : bundleFixedSequence.step2.alternatives;
+        
+        // Validar jugada
+        let ok = played === expectedMove;
+        
+        // Si mode top2, acceptar també alternatives
+        if (!ok && bundleAcceptMode === 'top2' && alternatives.length > 0) {
+            ok = alternatives.some(alt => alt.move === played);
+        }
+        
+        if (ok) {
+            if (pendingMoveEvaluation) { 
+                goodMoves++; 
+                pendingMoveEvaluation = false; 
+                updatePrecisionDisplay(); 
+            }
+            
+            if (bundleSequenceStep === 1) {
+                // CANVI: Netejar el missatge de Gemini només quan s'avança al pas 2
+                lastBundleGeminiHint = null;
+                
+                bundleSequenceStep = 2;
+                const replyMove = bundleFixedSequence.opponentMove.move;
+                applyBundleAutoReply(replyMove);
+                bundleStepStartFen = game.fen();
+                
+                $('#status').text('Pas 2 de 2: Completa la seqüència');
+                return;
+            }
+            
+            // CANVI: Netejar el missatge quan s'acaba l'exercici
+            lastBundleGeminiHint = null;
+            handleBundleSuccess();
+        } else {
+            // Error - resetar al pas actual
+            if (pendingMoveEvaluation) {
+                pendingMoveEvaluation = false;
+                totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
+                updatePrecisionDisplay();
+            }
+            
+            if (bundleSequenceStep === 1) {
+                bundleStepStartFen = bundleSequenceStartFen;
+            }
+            showBundleTryAgainModal();
+        }
+        return;
+    }
+    
+    // ❌ FALLBACK: Mètode antic si no hi ha seqüència fixa
     const playedBase = played.slice(0, 4);
     let ok = false;
     if (bundleData.mode === 'top1') {
@@ -5825,8 +6432,32 @@ function evaluateBundleAttempt(bundleData) {
         const accepted = [bundleData.pvMoves?.['1'], bundleData.pvMoves?.['2']].filter(Boolean);
         ok = accepted.length > 0 ? accepted.includes(played) : false;
     }
+    
     if (ok) {
-        if (pendingMoveEvaluation) { goodMoves++; pendingMoveEvaluation = false; updatePrecisionDisplay(); }
+        if (pendingMoveEvaluation) { 
+            goodMoves++; 
+            pendingMoveEvaluation = false; 
+            updatePrecisionDisplay(); 
+        }
+        
+        if (bundleSequenceStep === 1) {
+            // CANVI: Netejar el missatge de Gemini només quan s'avança al pas 2
+            lastBundleGeminiHint = null;
+            
+            const pvLine = selectBundlePvLineForMove(bundleData, played);
+            const replyMove = pvLine.length > 1 ? pvLine[1] : null;
+            bundleSequenceStep = 2;
+            if (replyMove) {
+                applyBundleAutoReply(replyMove);
+            } else {
+                requestBundleAutoReply();
+            }
+            bundleStepStartFen = game.fen();
+            return;
+        }
+        
+        // CANVI: Netejar el missatge quan s'acaba l'exercici
+        lastBundleGeminiHint = null;
         handleBundleSuccess();
     } else {
         if (pendingMoveEvaluation) {
@@ -5834,15 +6465,19 @@ function evaluateBundleAttempt(bundleData) {
             totalPlayerMoves = Math.max(0, totalPlayerMoves - 1);
             updatePrecisionDisplay();
         }
+        if (bundleSequenceStep === 1) {
+            bundleStepStartFen = bundleSequenceStartFen;
+        }
         showBundleTryAgainModal();
     }
 }
 
 function showBundleTryAgainModal() {
     $('#bundle-retry-modal').remove();
+    const stepLabel = bundleSequenceStep === 2 ? 'aquest segon pas' : 'aquest pas';
     const reasonText = bundleAcceptMode === 'top2'
-        ? 'Aquesta no és una de les dues millors opcions. Prova una altra jugada.'
-        : 'Aquesta no és la millor opció. Prova una altra jugada.';
+        ? `Aquesta no és una de les dues millors opcions per ${stepLabel}. Prova una altra jugada.`
+        : `Aquesta no és la millor opció per ${stepLabel}. Prova una altra jugada.`;
     let html = '<div class="modal-overlay" id="bundle-retry-modal" style="display:flex;">';
     html += '<div class="modal-content">';
     html += '<div class="modal-title">Tornar a intentar</div>';
@@ -5983,9 +6618,13 @@ function returnToMainMenuImmediate() {
     currentMatchError = null;
     currentBundleSource = null;
     currentBundleSeverity = null;
+    blunderMode = false;
+    updateBundleHintButtons();
 }
 
 function handleBundleSuccess() {
+    bundleSequenceStep = 1;
+    bundleStepStartFen = null;
     $('#status').text("EXCEL·LENT! Problema resolt 🏆").css('color', '#4a7c59').css('font-weight', 'bold');
     sessionStats.bundlesSolved++;
     if (stockfish) stockfish.postMessage('stop');
@@ -6000,6 +6639,12 @@ function handleBundleSuccess() {
         savedErrors = savedErrors.filter(e => e.fen !== currentBundleFen);
         currentBundleFen = null;
     }
+    // Netejar l'error també de les partides guardades
+    gameHistory.forEach(entry => {
+    if (entry.severeErrors && Array.isArray(entry.severeErrors)) {
+        entry.severeErrors = entry.severeErrors.filter(err => err.fen !== currentBundleFen);
+    }
+});
     
     saveStorage(); updateDisplay(); checkMissions();
     board.draggable = false;
@@ -6156,15 +6801,7 @@ function saveBlunderToBundle(fen, severity, bestMove, playerMove, bestMovePv = [
         }
     }
     if (!savedErrors.some(e => e.fen === fen)) {
-        let typeErrors = savedErrors.filter(e => e.severity === severity);
-        if (typeErrors.length >= 10) {
-            let furthestError = typeErrors.reduce((prev, curr) => {
-                  let prevDiff = Math.abs((prev.elo || 400) - userELO);
-                let currDiff = Math.abs((curr.elo || 400) - userELO);
-                return (currDiff > prevDiff) ? curr : prev;
-            });
-            savedErrors = savedErrors.filter(e => e !== furthestError);
-        }
+        // Bloc eliminat - ja no hi ha límit per categoria
         
         savedErrors.push({
             fen: fen,
@@ -6257,14 +6894,12 @@ function handleGameOver(manualResign = false) {
     if (wasLeagueMatch && !blunderMode) {
         applyLeagueAfterGame(leagueOutcome);
     }
-    
     const reviewCounts = summarizeReview(currentReview);
-    const severeErrors = getSevereErrors(currentReview);
+    const severeErrors = currentGameErrors.slice(); // ← Usar currentGameErrors
     recordGameHistory(msg, finalPrecision, reviewCounts, { severeErrors });
     persistReviewSummary(finalPrecision, msg);
     recordActivity(); saveStorage(); checkMissions(); updateDisplay(); updateReviewChart();
     $('#status').text(msg);
-    
     // Gestió de l'indicador de resultat
     if (leagueOutcome === 'win') setResultIndicator('win');
     else if (leagueOutcome === 'loss') setResultIndicator('loss');
@@ -6298,6 +6933,8 @@ function handleGameOver(manualResign = false) {
             showCalibrationResultsScreen();
         };
     }
+    $('#btn-resign').prop('disabled', true);
+    
     showPostGameReview(reviewHeader, finalPrecision, reviewCounts, onClose, { showCheckmate: showCheckmate });
     if (calibrationJustCompleted) {
         showCalibrationReveal(userELO);

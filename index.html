@@ -319,6 +319,70 @@
         body.epaper-mode .select-control { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
         body.epaper-mode .text-input { background: #e6e6e6; border: 1px solid #cfcfcf; color: #222; }
         .setting-help { margin-top: 8px; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.25; }
+        .gemini-config {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .gemini-input-row {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
+        #gemini-key-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.25);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        #btn-save-gemini-key {
+            flex-shrink: 0;
+            white-space: nowrap;
+            padding: 10px 16px;
+        }
+
+        .gemini-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        #gemini-key-status {
+            font-weight: 600;
+        }
+
+        /* Mòbil: layout adaptatiu */
+        @media (max-width: 520px) {
+            .gemini-input-row {
+                flex-direction: column;
+            }
+            
+            #gemini-key-input {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            #btn-save-gemini-key {
+                width: 100%;
+            }
+            
+            .gemini-status {
+                justify-content: space-between;
+            }
+        }
         body.epaper-mode .header,
         body.epaper-mode .precision-panel,
         body.epaper-mode .controls,
@@ -514,6 +578,17 @@
             color: white;
             box-shadow: 0 4px 15px rgba(123, 31, 162, 0.4);
             border: 1px solid rgba(255,255,255,0.2);
+        }
+        .btn-brain-hint {
+            background: linear-gradient(135deg, #324a88, #1b2e5e);
+            color: #f4f6ff;
+            box-shadow: 0 4px 14px rgba(49, 68, 122, 0.35);
+            border: 1px solid rgba(255,255,255,0.18);
+        }
+        .btn-brain-hint img {
+            width: 20px;
+            height: 20px;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
         }
         
         .btn-danger {
@@ -808,8 +883,94 @@
         
         .controls { background: var(--bg-card); padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .status-message { color: var(--text-primary); font-size: 0.95rem; margin-bottom: 12px; text-align: center; min-height: 24px; }
-        .game-buttons { display: flex; gap: 8px; }
-        .game-buttons .btn { flex: 1; padding: 12px 10px; font-size: 0.85rem; }
+        /* Controls de joc - Layout responsive */
+        .game-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        body.device-desktop .game-buttons {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        body.device-tablet .game-buttons {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 9px;
+        }
+
+        .game-buttons .btn {
+            flex: none;
+            padding: 12px 10px;
+            font-size: 0.85rem;
+        }
+
+        body.device-desktop .game-buttons .btn {
+            padding: 14px 12px;
+            font-size: 0.9rem;
+        }
+
+        /* Botó de rendir-se integrat al requadre de joc (desktop) */
+        @media (min-width: 769px) {
+            .controls {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 12px;
+                padding: 16px;
+            }
+            
+            #btn-resign {
+                order: 10; /* Col·locar al final */
+                margin-left: auto;
+            }
+        }
+        
+        /* Botó del cervell - millorat */
+        .btn-brain-hint {
+            background: linear-gradient(135deg, #5e35b1, #4527a0);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(94, 53, 177, 0.4);
+            border: 1px solid rgba(255,255,255,0.2);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-brain-hint:hover:not(:disabled) {
+            background: linear-gradient(135deg, #6a3fc7, #5230b8);
+            box-shadow: 0 6px 16px rgba(94, 53, 177, 0.5);
+        }
+
+        .btn-brain-hint img {
+            width: 20px;
+            height: 20px;
+            filter: brightness(1.2) drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+
+        body.epaper-mode .btn-brain-hint img {
+            filter: grayscale(100%) brightness(0.3);
+        }
+
+        /* Status message - millorat per mostrar màximes */
+        .status-message {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+            text-align: center;
+            min-height: 24px;
+            line-height: 1.5;
+        }
+
+        body.device-mobile .status-message {
+            font-size: 0.88rem;
+        }
+
+        body.epaper-mode .status-message {
+            filter: none;
+        }
 
         /* STATS SCREEN */
         #stats-screen { text-align: left; }
@@ -1573,11 +1734,16 @@
                 <div class="setting-help">Això resetarà el teu perfil actual.</div>
                 <div class="setting-row" style="margin-top:10px;">
                     <div class="setting-label">Clau API Gemini (gemini-3-flash-preview)</div>
-                    <div class="setting-inline">
-                        <input type="password" id="gemini-key-input" class="text-input" placeholder="Enganxa la clau">
+                </div>
+                <div class="gemini-config">
+                    <div class="gemini-input-row">
+                        <input type="password" id="gemini-key-input" placeholder="Enganxa la clau API" />
                         <button class="btn btn-secondary" id="btn-save-gemini-key">Guardar</button>
                     </div>
-                    <div class="setting-status" id="gemini-key-status">—</div>
+                    <div class="gemini-status">
+                        <span>Estat:</span>
+                        <span id="gemini-key-status">—</span>
+                    </div>
                 </div>
                 <div class="setting-help">La clau queda guardada i les revisions de partides es generen automàticament.</div>
             </div>
@@ -1827,6 +1993,10 @@
                 <div class="status-message" id="status">Preparat...</div>
                 <div class="game-buttons">
                     <button class="btn btn-hint" id="btn-hint" title="Demanar pista">💡 Pista</button>
+                    <button class="btn btn-brain-hint" id="btn-brain-hint" title="Màxima amb Gemini" style="display:none;">
+                        <img src="brain.svg" alt="Cervell">
+                        <span>Màxima</span>
+                    </button>
                     <button class="btn btn-secondary" id="btn-back">Menú</button>
                     <button class="btn btn-primary" id="btn-resign">Rendir-se</button>
                 </div>
