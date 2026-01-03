@@ -5458,6 +5458,8 @@ function setupEvents() {
     });
 
     const showResignModal = () => {
+        // No permetre rendir-se si el joc ja ha acabat
+        if (!game || game.game_over()) return;
         $('#resign-modal').css('display', 'flex');
     };
 
