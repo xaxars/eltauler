@@ -38,6 +38,8 @@ let tvJeroglyphicsActualMove = null;
 let tvJeroglyphicsResumePlayback = false;
 let tvJeroglyphicsSolved = false;
 let tvJeroglyphicsIncorrect = false;
+let lessonCounter = 0;
+let currentLessonData = null;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -5263,6 +5265,261 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
     // Bloc de neteja de reviews eliminat
 }
 
+function loadLessonCounter() {
+    const saved = localStorage.getItem('chess_lessonCounter');
+    if (saved) {
+        const parsed = parseInt(saved, 10);
+        lessonCounter = Number.isNaN(parsed) ? 0 : parsed;
+    }
+}
+
+function saveLessonCounter() {
+    localStorage.setItem('chess_lessonCounter', lessonCounter.toString());
+}
+
+function getSeverityColor(errorRate) {
+    if (errorRate >= 40) return 'var(--severity-high)';
+    if (errorRate >= 20) return 'var(--severity-med)';
+    return 'var(--severity-low)';
+}
+
+function getSeverityClass(severity) {
+    if (severity === 'high') return 'high-error';
+    if (severity === 'medium') return 'medium-error';
+    return 'low-error';
+}
+
+function calculateAvgSeverity(severities) {
+    if (severities.length === 0) return 'low';
+    const severityValues = { low: 1, medium: 2, high: 3 };
+    const avg = severities.reduce((sum, s) => sum + (severityValues[s] || 1), 0) / severities.length;
+    if (avg >= 2.5) return 'high';
+    if (avg >= 1.5) return 'medium';
+    return 'low';
+}
+
+function mapQualityToSeverity(quality) {
+    if (quality === 'blunder') return 'high';
+    if (quality === 'mistake') return 'medium';
+    if (quality === 'inaccuracy') return 'low';
+    return null;
+}
+
+function findReviewEntryForMove(entry, moveNumber, moveName) {
+    if (!Array.isArray(entry.review)) return null;
+    return entry.review.find((reviewEntry) => {
+        if (reviewEntry.moveNumber !== moveNumber) return false;
+        return reviewEntry.move === moveName || reviewEntry.playerMoveSan === moveName;
+    }) || null;
+}
+
+async function analyzeLastOpenings() {
+    const recentGames = gameHistory.slice(-10);
+    const reviewSection = $('#lesson-review-section');
+
+    if (recentGames.length === 0) {
+        $('#lesson-stats').html('<p style="color:var(--text-secondary);">No hi ha partides per analitzar.</p>');
+        $('#lesson-moves-list').empty();
+        reviewSection.hide();
+        return;
+    }
+
+    const openingMoves = {};
+
+    recentGames.forEach((entry) => {
+        if (!entry.moves || entry.moves.length < 2) return;
+        const maxPlies = Math.min(10, entry.moves.length);
+        const playerColor = entry.playerColor || 'white';
+
+        entry.moves.slice(0, maxPlies).forEach((move, idx) => {
+            const isPlayerMove = playerColor === 'white' ? idx % 2 === 0 : idx % 2 === 1;
+            if (!isPlayerMove) return;
+
+            const moveName = move?.san || move;
+            if (!openingMoves[moveName]) {
+                openingMoves[moveName] = {
+                    total: 0,
+                    errors: 0,
+                    severity: []
+                };
+            }
+
+            openingMoves[moveName].total++;
+
+            const moveNumber = Math.ceil((idx + 1) / 2);
+            const reviewEntry = findReviewEntryForMove(entry, moveNumber, moveName);
+            const severity = reviewEntry ? mapQualityToSeverity(reviewEntry.quality) : null;
+            if (severity) {
+                openingMoves[moveName].errors++;
+                openingMoves[moveName].severity.push(severity);
+            }
+        });
+    });
+
+    const movesWithErrors = Object.entries(openingMoves)
+        .map(([move, data]) => ({
+            move,
+            total: data.total,
+            errors: data.errors,
+            errorRate: data.total > 0 ? (data.errors / data.total) * 100 : 0,
+            avgSeverity: calculateAvgSeverity(data.severity)
+        }))
+        .filter(m => m.errors > 0)
+        .sort((a, b) => b.errorRate - a.errorRate);
+
+    currentLessonData = {
+        totalGames: recentGames.length,
+        movesAnalyzed: movesWithErrors,
+        timestamp: new Date().toISOString()
+    };
+
+    displayLessonMoves(movesWithErrors);
+
+    const totalMoves = Object.values(openingMoves).reduce((sum, m) => sum + m.total, 0);
+    const totalErrors = Object.values(openingMoves).reduce((sum, m) => sum + m.errors, 0);
+    const overallErrorRate = totalMoves > 0 ? ((totalErrors / totalMoves) * 100).toFixed(1) : 0;
+
+    $('#lesson-stats').html(`
+        <div style="text-align:center; margin:20px 0;">
+            <p style="font-size:1.1rem; color:var(--text-primary);">
+                Analitzades ${recentGames.length} partides recents
+            </p>
+            <p style="font-size:0.95rem; color:var(--text-secondary); margin-top:8px;">
+                Taxa d'error global en obertures: <strong style="color:${getSeverityColor(Number(overallErrorRate))}">${overallErrorRate}%</strong>
+            </p>
+        </div>
+    `);
+}
+
+function displayLessonMoves(moves) {
+    if (moves.length === 0) {
+        $('#lesson-review-section').hide();
+        return;
+    }
+
+    const html = moves.map(m => `
+        <div class="lesson-move-item ${getSeverityClass(m.avgSeverity)}">
+            <div>
+                <div class="lesson-move-name">${m.move}</div>
+                <div class="lesson-move-error">
+                    ${m.errors}/${m.total} vegades amb error
+                </div>
+            </div>
+            <div class="lesson-error-percentage" style="color:${getSeverityColor(m.errorRate)}">
+                ${m.errorRate.toFixed(0)}%
+            </div>
+        </div>
+    `).join('');
+
+    $('#lesson-moves-list').html(html);
+    $('#lesson-review-section').show();
+    $('#lesson-gemini-review').hide();
+}
+
+async function generateLessonReview() {
+    if (!currentLessonData || currentLessonData.movesAnalyzed.length === 0) {
+        alert('Primer has d\'analitzar les obertures.');
+        return;
+    }
+
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) {
+        alert('Configura la clau de Gemini per generar ressenyes.');
+        return;
+    }
+
+    const btn = $('#btn-generate-lesson-review');
+    btn.prop('disabled', true).text('⚔️ Generant ressenya...');
+
+    try {
+        const prompt = buildLessonReviewPrompt(currentLessonData);
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.8,
+                        maxOutputTokens: 2000
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Error Gemini: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const reviewText = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No s\'ha pogut generar la ressenya.';
+
+        lessonCounter++;
+        saveLessonCounter();
+
+        displayLessonReview(reviewText, lessonCounter);
+        saveLessonToHistory(reviewText, lessonCounter);
+    } catch (error) {
+        console.error('[Lesson Review] Error:', error);
+        alert('Error generant la ressenya. Comprova la clau de Gemini.');
+    } finally {
+        btn.prop('disabled', false).text('⚔️ Ressenya de Batalla');
+    }
+}
+
+function buildLessonReviewPrompt(lessonData) {
+    const movesDetail = lessonData.movesAnalyzed
+        .map((m, idx) => `${idx + 1}. **${m.move}**: Taxa d'error del ${m.errorRate.toFixed(0)}% (${m.errors}/${m.total} vegades)`)
+        .join('\n');
+
+    return `Ets un mestre d'escacs experimentat que parla amb metàfores bèl·liques i estratègiques. El teu alumne ha comès els següents errors en les seves obertures recents:
+
+${movesDetail}
+
+INSTRUCCIONS:
+1. **NO mencioniss coordenades** (e4, Nf3, etc.) directament
+2. Parla de **peces** (el cavaller, la torre, el peó) i **conceptes estratègics**
+3. Usa **metàfores del camp de batalla**: avançada, flanc, línia defensiva, contraatac, etc.
+4. **Estructura**:
+   - Títol: "Lliçó de Batalla [número següent]"
+   - Diagnòstic general (2-3 frases sobre el patró d'errors)
+   - Per cada error principal (màxim 3-4):
+     * Nom de la peça/concepte
+     * Per què és problemàtic
+     * Com evitar-ho amb visió tàctica
+   - Consell final motivador
+
+5. **To**: Directe, motivador, com un general parlant als seus soldats
+6. Màxim 400 paraules
+
+Genera la ressenya ara:`;
+}
+
+function displayLessonReview(reviewText, lessonNumber) {
+    const formatted = reviewText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+
+    $('#lesson-gemini-review').html(`
+        <h4>⚔️ Lliçó ${lessonNumber}</h4>
+        <div>${formatted}</div>
+    `).fadeIn();
+}
+
+function saveLessonToHistory(reviewText, lessonNumber) {
+    const lessons = JSON.parse(localStorage.getItem('chess_lessons') || '[]');
+    lessons.push({
+        number: lessonNumber,
+        review: reviewText,
+        data: currentLessonData,
+        date: new Date().toISOString()
+    });
+
+    if (lessons.length > 50) lessons.shift();
+
+    localStorage.setItem('chess_lessons', JSON.stringify(lessons));
+}
+
 function checkShareSupport() {
     if ((navigator.canShare && navigator.share) || supportsDirectoryPicker()) $('#btn-smart-share').show();
 }
@@ -5311,6 +5568,7 @@ function setupEvents() {
         $('#lesson-screen').show();
     });
     $('#btn-analyze-openings').click(() => { analyzeLastOpenings(); });
+    $('#btn-generate-lesson-review').click(() => { void generateLessonReview(); });
     $('#btn-back-lesson').click(() => { $('#lesson-screen').hide(); $('#start-screen').show(); });
     $('#btn-back-league').click(() => { $('#league-screen').hide(); $('#start-screen').show(); });
     $('#btn-league-new').click(() => { if (guardCalibrationAccess()) { createNewLeague(true); openLeague(); } });
@@ -7127,6 +7385,7 @@ $('#btn-dismiss-install').on('click', () => {
 $(document).ready(() => {
     updateDeviceType();
     loadStorage();
+    loadLessonCounter();
     if (!isCalibrationActive()) {
         syncEngineEloFromUser();
     }

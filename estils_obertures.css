@@ -667,6 +667,93 @@ body.epaper-mode .practice-feedback.feedback-info {
     border: 2px solid #222;
 }
 
+.lesson-review-section {
+    background: var(--bg-warm);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid rgba(201, 162, 39, 0.3);
+}
+
+.lesson-review-header h3 {
+    color: var(--accent-gold);
+    font-family: 'Cinzel', serif;
+    margin-bottom: 15px;
+    font-size: 1.3rem;
+}
+
+.lesson-moves-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.lesson-move-item {
+    background: var(--bg-card);
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid transparent;
+}
+
+.lesson-move-item.high-error {
+    border-left-color: var(--severity-high);
+}
+
+.lesson-move-item.medium-error {
+    border-left-color: var(--severity-med);
+}
+
+.lesson-move-item.low-error {
+    border-left-color: var(--severity-low);
+}
+
+.lesson-move-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.lesson-move-error {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.lesson-error-percentage {
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.3);
+}
+
+.lesson-gemini-review {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 12px;
+    border: 2px solid var(--accent-purple);
+    line-height: 1.6;
+}
+
+.lesson-gemini-review h4 {
+    color: var(--accent-gold);
+    font-family: 'Cinzel', serif;
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.lesson-gemini-review p {
+    margin-bottom: 12px;
+}
+
+.lesson-gemini-review strong {
+    color: var(--accent-gold);
+}
+
 /* ============================================================================
    FI DELS ESTILS
    ============================================================================ */
