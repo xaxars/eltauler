@@ -5243,15 +5243,25 @@ function setupEvents() {
 
     $('#btn-badges').click(() => { updateBadgesModal(); $('#badges-modal').css('display', 'flex'); });
     
-    $('#btn-stats').click(() => { $('#start-screen').hide(); $('#stats-screen').show(); updateStatsDisplay(); });
+    $('#btn-stats').click(() => {
+        $('#game-screen').hide();
+        $('#start-screen').hide();
+        $('#stats-screen').show();
+        updateStatsDisplay();
+    });
     $('#btn-history').click(() => {
+        $('#game-screen').hide();
         $('#start-screen').hide();
         $('#history-screen').show();
         initHistoryBoard();
         renderGameHistory();
     });
     $('#btn-league').click(() => { if (guardCalibrationAccess()) openLeague(); });
-    $('#btn-lesson').click(() => { $('#start-screen').hide(); $('#lesson-screen').show(); });
+    $('#btn-lesson').click(() => {
+        $('#game-screen').hide();
+        $('#start-screen').hide();
+        $('#lesson-screen').show();
+    });
     $('#btn-analyze-openings').click(() => { analyzeLastOpenings(); });
     $('#btn-back-lesson').click(() => { $('#lesson-screen').hide(); $('#start-screen').show(); });
     $('#btn-back-league').click(() => { $('#league-screen').hide(); $('#start-screen').show(); });
