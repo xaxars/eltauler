@@ -18,7 +18,8 @@ let openingPracticeState = {
     isPracticing: false,          // Si estem en mode pràctica
     completedMoves: {},           // Objecte per guardar els moviments completats: {white: [1,2,3], black: [1,2]}
     currentPracticeFen: null,     // FEN de la posició actual de pràctica
-    targetMove: null              // Moviment objectiu que cal fer
+    targetMove: null,             // Moviment objectiu que cal fer
+    currentError: null            // Referència a l'error actual
 };
 
 // ============================================================================
@@ -57,13 +58,17 @@ function buildDetailedOpeningStats(entries) {
             if (!isCorrect) {
                 moveData.errors.push({
                     gameDate: entry.date || 'Sense data',
-                    moveNotation: move.move || '?',
+                    moveNotation: move.move || move.playerMoveSan || '?',
                     quality: move.quality || 'unknown',
-                    cpLoss: move.cpLoss || 0,
+                    cpLoss: move.cpLoss || move.swing || 0,
                     bestMove: move.bestMove || '',
+                    bestMoveSan: move.bestMoveSan || '',
                     fen: move.fen || '',
+                    fenBefore: move.fenBefore || '',
                     comment: move.comment || '',
-                    gameId: entry.timestamp || Date.now()
+                    gameId: entry.timestamp || Date.now(),
+                    playerMove: move.playerMove || '',
+                    moveNumber: moveNumber
                 });
             }
         });
@@ -176,7 +181,7 @@ function openMoveReviewDrawer(color, moveNumber, stats) {
         return;
     }
 
-    // Crear el HTML del calaix
+    // Crear el HTML del calaix amb botons individuals per cada error
     const drawerHtml = `
         <div class="move-review-drawer-overlay" id="move-review-drawer">
             <div class="move-review-drawer-content">
@@ -186,9 +191,12 @@ function openMoveReviewDrawer(color, moveNumber, stats) {
                 </div>
 
                 <div class="drawer-body">
+                    <div class="drawer-instructions">
+                        <p>📋 Selecciona un error per practicar:</p>
+                    </div>
                     <div class="error-list">
                         ${errors.map((error, idx) => `
-                            <div class="error-item">
+                            <div class="error-item" data-error-idx="${idx}">
                                 <div class="error-header">
                                     <span class="error-number">#${idx + 1}</span>
                                     <span class="error-date">${error.gameDate}</span>
@@ -196,9 +204,17 @@ function openMoveReviewDrawer(color, moveNumber, stats) {
                                 </div>
                                 <div class="error-details">
                                     <div><strong>Jugada feta:</strong> ${error.moveNotation}</div>
-                                    <div><strong>Millor jugada:</strong> ${error.bestMove}</div>
+                                    <div><strong>Millor jugada:</strong> ${error.bestMoveSan || error.bestMove}</div>
                                     <div><strong>Pèrdua de CP:</strong> ${Math.round(error.cpLoss)}</div>
                                     ${error.comment ? `<div class="error-comment">${error.comment}</div>` : ''}
+                                </div>
+                                <div class="error-actions">
+                                    <button class="btn btn-sm btn-practice-error"
+                                            data-error-idx="${idx}"
+                                            data-color="${color}"
+                                            data-move="${moveNumber}">
+                                        🎯 Practicar aquest error
+                                    </button>
                                 </div>
                             </div>
                         `).join('')}
@@ -206,10 +222,10 @@ function openMoveReviewDrawer(color, moveNumber, stats) {
                 </div>
 
                 <div class="drawer-footer">
-                    <button class="btn btn-primary btn-start-practice"
+                    <button class="btn btn-primary btn-practice-random"
                             data-color="${color}"
                             data-move="${moveNumber}">
-                        🎯 Practicar aquest moviment
+                        🎲 Practicar error aleatori
                     </button>
                     <button class="btn btn-secondary btn-close-drawer">Tancar</button>
                 </div>
@@ -220,13 +236,24 @@ function openMoveReviewDrawer(color, moveNumber, stats) {
     // Afegir al DOM
     $('#app-container').append(drawerHtml);
 
-    // Event listeners
+    // Event listeners per tancar
     $('.btn-close-drawer').off('click').on('click', closeMoveReviewDrawer);
-    $('.btn-start-practice').off('click').on('click', function() {
+    
+    // Event listener per practicar error específic
+    $('.btn-practice-error').off('click').on('click', function() {
+        const errorIdx = parseInt($(this).data('error-idx'));
         const color = $(this).data('color');
         const moveNumber = $(this).data('move');
         closeMoveReviewDrawer();
-        startMovePractice(color, moveNumber, errors);
+        startMovePractice(color, moveNumber, errors, errorIdx);
+    });
+    
+    // Event listener per practicar error aleatori
+    $('.btn-practice-random').off('click').on('click', function() {
+        const color = $(this).data('color');
+        const moveNumber = $(this).data('move');
+        closeMoveReviewDrawer();
+        startMovePractice(color, moveNumber, errors, null);
     });
 
     // Animació d'obertura
@@ -256,7 +283,7 @@ function closeMoveReviewDrawer() {
  * @param {number} moveNumber - Número del moviment
  * @param {Array} errors - Llista d'errors per aquest moviment
  */
-function startMovePractice(color, moveNumber, errors) {
+function startMovePractice(color, moveNumber, errors, errorIdx = null) {
     // Inicialitzar estat de pràctica
     openingPracticeState = {
         activeMoveNumber: moveNumber,
@@ -265,15 +292,17 @@ function startMovePractice(color, moveNumber, errors) {
         isPracticing: true,
         completedMoves: openingPracticeState.completedMoves || {},
         currentPracticeFen: null,
-        targetMove: null
+        targetMove: null,
+        currentError: null
     };
 
     // Navegar a la pantalla de joc
     $('#lesson-screen').hide();
     $('#game-screen').show();
+    $('#start-screen').hide();
 
     // Configurar el tauler per la pràctica
-    setupPracticeBoard(color, moveNumber, errors);
+    setupPracticeBoard(color, moveNumber, errors, errorIdx);
 
     // Actualitzar UI
     updatePracticeUI();
@@ -285,50 +314,140 @@ function startMovePractice(color, moveNumber, errors) {
  * @param {number} moveNumber - Número del moviment a practicar
  * @param {Array} errors - Errors d'aquest moviment
  */
-function setupPracticeBoard(color, moveNumber, errors) {
-    // Reiniciar joc
-    game = new Chess();
+function setupPracticeBoard(color, moveNumber, errors, errorIdx = null) {
+    console.log('🎯 Iniciant pràctica...');
+    
+    // Seleccionar error (específic o aleatori)
+    const selectedIdx = errorIdx !== null ? errorIdx : Math.floor(Math.random() * errors.length);
+    const errorToPractice = errors[selectedIdx];
+    
+    console.log('Error seleccionat:', errorToPractice);
+    
+    // Guardar referència a l'error actual
+    openingPracticeState.currentError = errorToPractice;
 
-    // Seleccionar aleatòriament un error per practicar
-    const errorToPractice = errors[Math.floor(Math.random() * errors.length)];
-
-    // Configurar posició des del FEN de l'error
-    if (errorToPractice.fen) {
-        // Retrocedir un moviment per posar el jugador en la posició correcta
-        const tempGame = new Chess(errorToPractice.fen);
-        tempGame.undo(); // Desfer el moviment erroni
-        const practiceFen = tempGame.fen();
-        game.load(practiceFen);
-        openingPracticeState.currentPracticeFen = practiceFen;
+    // CRITICA: Usar fenBefore si està disponible, sinó reconstruir
+    let practiceFen;
+    
+    if (errorToPractice.fenBefore) {
+        // ✅ CAS IDEAL: Tenim el FEN abans del moviment
+        practiceFen = errorToPractice.fenBefore;
+        console.log('✅ Usant fenBefore:', practiceFen);
+    } else if (errorToPractice.fen) {
+        // ⚠️ CAS ALTERNATIU: Intentar reconstruir des del FEN després
+        console.warn('⚠️ No hi ha fenBefore, intentant reconstruir...');
+        try {
+            const tempGame = new Chess(errorToPractice.fen);
+            const history = tempGame.history({ verbose: true });
+            
+            if (history.length > 0) {
+                // Desfer l'últim moviment per obtenir la posició anterior
+                tempGame.undo();
+                practiceFen = tempGame.fen();
+                console.log('✅ FEN reconstruït:', practiceFen);
+            } else {
+                // No hi ha història, usar FEN inicial
+                practiceFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+                console.warn('⚠️ No hi ha història, usant FEN inicial');
+            }
+        } catch (e) {
+            console.error('❌ Error reconstruint FEN:', e);
+            // Fallback: FEN inicial
+            practiceFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        }
+    } else {
+        // ❌ CAS CRÍTIC: No hi ha cap FEN
+        console.error('❌ No hi ha cap FEN disponible!');
+        alert('Error: No es pot carregar la posició per practicar.');
+        returnToLessonScreen();
+        return;
     }
+
+    // Validar el FEN abans d'usar-lo
+    try {
+        const testGame = new Chess(practiceFen);
+        if (!testGame.fen()) {
+            throw new Error('FEN invàlid');
+        }
+    } catch (e) {
+        console.error('❌ FEN invàlid:', practiceFen, e);
+        alert('Error: La posició a practicar no és vàlida.');
+        returnToLessonScreen();
+        return;
+    }
+
+    // Inicialitzar joc amb el FEN validat
+    game = new Chess(practiceFen);
+    openingPracticeState.currentPracticeFen = practiceFen;
+    
+    console.log('🎮 Joc inicialitzat amb FEN:', game.fen());
 
     // Guardar el millor moviment com a objectiu
     openingPracticeState.targetMove = errorToPractice.bestMove;
+    
+    console.log('🎯 Moviment objectiu:', openingPracticeState.targetMove);
 
     // Configurar color del jugador
     playerColor = color === 'white' ? 'w' : 'b';
+    
+    console.log('🎨 Color del jugador:', playerColor);
 
-    // Inicialitzar tauler
+    // Destruir tauler anterior si existeix
     if (board) {
-        board.destroy();
+        try {
+            board.destroy();
+        } catch (e) {
+            console.warn('⚠️ Error destruint tauler anterior:', e);
+        }
     }
 
-    board = ChessBoard('myBoard', {
-        draggable: true,
-        position: game.fen(),
-        orientation: playerColor === 'w' ? 'white' : 'black',
-        onDragStart: onDragStart,
-        onDrop: onDropPractice,
-        onSnapEnd: onSnapEnd
-    });
+    // Inicialitzar nou tauler
+    try {
+        board = ChessBoard('myBoard', {
+            draggable: true,
+            position: game.fen(),
+            orientation: playerColor === 'w' ? 'white' : 'black',
+            onDragStart: onDragStart,
+            onDrop: onDropPractice,
+            onSnapEnd: onSnapEnd
+        });
+        
+        console.log('✅ Tauler creat amb èxit');
+        
+        // Forçar actualització de la posició
+        setTimeout(() => {
+            board.position(game.fen());
+            console.log('🔄 Posició del tauler actualitzada');
+        }, 100);
+        
+    } catch (e) {
+        console.error('❌ Error creant tauler:', e);
+        alert('Error: No es pot crear el tauler.');
+        returnToLessonScreen();
+        return;
+    }
 
     // Actualitzar UI
     $('#game-mode-title').text(`🎯 Pràctica: Moviment ${moveNumber} (${color === 'white' ? 'Blanques' : 'Negres'})`);
-    $('#status').text('Troba el millor moviment!');
+    $('#status').html(`
+        <div style="margin-bottom: 8px;">
+            <strong>Troba el millor moviment!</strong>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+            Error #${selectedIdx + 1} de ${errors.length} | 
+            Progressió: ${openingPracticeState.correctMovesCount}/2 correctes
+        </div>
+    `);
 
     // Activar botons de pista
-    $('#btn-hint').show();
-    $('#btn-brain-hint').show();
+    $('#btn-hint').show().prop('disabled', false);
+    $('#btn-brain-hint').show().prop('disabled', false);
+    
+    // Actualitzar text dels botons
+    $('#btn-hint').html('💡 Pista');
+    $('#btn-brain-hint').html('<img src="brain.svg" alt="Cervell"><span>Màxima</span>');
+    
+    console.log('✅ Setup complet!');
 }
 
 /**
@@ -701,7 +820,52 @@ function showGeminiAnalysisModal(analysis) {
  * Actualitza elements bàsics de la UI durant la pràctica
  */
 function updatePracticeUI() {
-    $('#status').text('Troba el millor moviment!');
+    const { activeMoveNumber, activeColor, correctMovesCount, currentError } = openingPracticeState;
+    
+    // Assegurar que estem a la pantalla correcta
+    $('#game-screen').show();
+    $('#lesson-screen').hide();
+    $('#start-screen').hide();
+    
+    // Actualitzar títol
+    $('#game-mode-title').text(
+        `🎯 Pràctica: Moviment ${activeMoveNumber} (${activeColor === 'white' ? 'Blanques' : 'Negres'})`
+    );
+    
+    // Actualitzar status amb informació útil
+    $('#status').html(`
+        <div style="margin-bottom: 8px;">
+            <strong>Troba el millor moviment!</strong>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+            Progressió: <strong style="color: var(--accent-gold);">${correctMovesCount}/2</strong> moviments correctes
+        </div>
+    `);
+    
+    // Mostrar informació de l'error si està disponible
+    if (currentError) {
+        const errorInfo = `
+            <div style="margin-top: 8px; padding: 8px; background: rgba(201,162,39,0.1); border-radius: 6px; font-size: 0.8rem;">
+                <div>Millor jugada: <strong>${currentError.bestMoveSan || currentError.bestMove}</strong></div>
+                <div>Pèrdua: <strong>${Math.round(currentError.cpLoss)} CP</strong></div>
+            </div>
+        `;
+        // Opcionalment afegir això si vols mostrar més info
+        // $('#status').append(errorInfo);
+    }
+    
+    // Assegurar que els botons estan visibles i actius
+    $('#btn-hint').show().prop('disabled', false).css('opacity', '1');
+    $('#btn-brain-hint').show().prop('disabled', false).css('opacity', '1');
+    $('#btn-back').show();
+    $('#btn-resign').hide();
+    
+    // Missatge informatiu sobre pistes (només primera vegada)
+    if (correctMovesCount === 0) {
+        setTimeout(() => {
+            showFeedback('info', '💡 Pots usar les pistes si necessites ajuda!');
+        }, 1000);
+    }
 }
 
 /**
@@ -710,26 +874,40 @@ function updatePracticeUI() {
  * @param {string} message - Missatge a mostrar
  */
 function showFeedback(type, message) {
-    const feedbackClass = type === 'success' ? 'feedback-success' : 'feedback-error';
-
+    let feedbackClass;
+    switch(type) {
+        case 'success':
+            feedbackClass = 'feedback-success';
+            break;
+        case 'error':
+            feedbackClass = 'feedback-error';
+            break;
+        case 'info':
+            feedbackClass = 'feedback-info';
+            break;
+        default:
+            feedbackClass = 'feedback-info';
+    }
+    
     const feedbackHtml = `
         <div class="practice-feedback ${feedbackClass}">
             ${message}
         </div>
     `;
-
+    
     // Eliminar feedback anterior si existeix
     $('.practice-feedback').remove();
-
+    
     // Afegir nou feedback
     $('.board-container').append(feedbackHtml);
-
-    // Eliminar després de 2 segons
+    
+    // Eliminar després de 2 segons (3 per info)
+    const duration = type === 'info' ? 3000 : 2000;
     setTimeout(() => {
         $('.practice-feedback').fadeOut(() => {
             $('.practice-feedback').remove();
         });
-    }, 2000);
+    }, duration);
 }
 
 /**

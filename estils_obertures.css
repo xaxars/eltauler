@@ -541,6 +541,132 @@ body.epaper-mode .gemini-analysis-content {
     }
 }
 
+/* ----------------------------------------------------------------------------
+   10. ESTILS PER ERRORS INDIVIDUALS
+   ---------------------------------------------------------------------------- */
+
+.drawer-instructions {
+    padding: 12px;
+    background: rgba(201, 162, 39, 0.1);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.drawer-instructions p {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.error-actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(201, 162, 39, 0.1);
+    display: flex;
+    justify-content: center;
+}
+
+.btn-practice-error {
+    padding: 8px 16px;
+    background: var(--accent-gold);
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-practice-error:hover {
+    background: #d4b03a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(201, 162, 39, 0.3);
+}
+
+.btn-practice-random {
+    min-width: 200px;
+}
+
+.btn-sm {
+    padding: 6px 12px !important;
+    font-size: 0.8rem !important;
+}
+
+body.epaper-mode .error-actions {
+    border-top: 1px solid #cfcfcf;
+}
+
+body.epaper-mode .btn-practice-error {
+    background: #444;
+    color: #f2f2f2;
+}
+
+body.epaper-mode .drawer-instructions {
+    background: #e6e6e6;
+    border: 1px solid #cfcfcf;
+}
+
+/* Status enriquit */
+#status strong {
+    color: var(--accent-gold);
+}
+
+/* ----------------------------------------------------------------------------
+   11. LOGGING VISUAL (OPCIONAL)
+   ---------------------------------------------------------------------------- */
+
+.practice-debug {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #0f0;
+    padding: 10px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    max-width: 300px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 9999;
+    display: none;
+}
+
+.practice-debug.active {
+    display: block;
+}
+
+.practice-debug .log-entry {
+    margin: 2px 0;
+}
+
+.practice-debug .log-error {
+    color: #f00;
+}
+
+.practice-debug .log-warn {
+    color: #ff0;
+}
+
+.practice-debug .log-success {
+    color: #0f0;
+}
+
+.practice-feedback.feedback-info {
+    background: var(--accent-blue);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+body.epaper-mode .practice-feedback.feedback-info {
+    background: #555;
+    color: #f2f2f2;
+    border: 2px solid #222;
+}
+
 /* ============================================================================
    FI DELS ESTILS
    ============================================================================ */

@@ -3229,12 +3229,19 @@ function registerMoveReview(swing, analysisData = {}) {
         } catch (e) {}
     }
     
+    // Guardar FEN ABANS del moviment del jugador per poder practicar
+    const fenBeforeMove = lastPosition;
+    const fenAfterMove = game.fen();
+
     currentReview.push({
-        fen: analysisData.fen || lastPosition || null,
+        fen: fenAfterMove,
+        fenBefore: fenBeforeMove,
         moveNumber: Math.ceil(history.length / 2),
         playerMove: lastHumanMoveUci || '—',
         playerMoveSan: lastMove ? lastMove.san : '—',
+        move: lastMove ? lastMove.san : '—',
         bestMove: analysisData.bestMove || null,
+        cpLoss: Math.abs(swing),
         evalBefore: analysisData.evalBefore ?? null,
         evalAfter: analysisData.evalAfter ?? null,
         swing: Math.abs(swing),
@@ -3242,6 +3249,7 @@ function registerMoveReview(swing, analysisData = {}) {
         isCapture: lastMove ? !!lastMove.captured : false,
         isCheck: game.in_check(),
         timestamp: Date.now(),
+        comment: '',
         
         // NOUS CAMPS ENRIQUITS
         depth: analysisData.depth || null,
