@@ -1,0 +1,546 @@
+/* ============================================================================
+   ESTILS PER A L'ANÀLISI I PRÀCTICA D'OBERTURES
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   1. ESTADÍSTIQUES D'OBERTURES AMB COLUMNA D'ERRORS
+   ---------------------------------------------------------------------------- */
+
+.opening-stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.opening-move-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 70px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg-warm);
+    border-radius: 8px;
+    border: 1px solid rgba(201, 162, 39, 0.1);
+    transition: all 0.2s ease;
+}
+
+.opening-move-row:hover {
+    background: rgba(201, 162, 39, 0.08);
+    border-color: rgba(201, 162, 39, 0.3);
+}
+
+.move-number {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.precision-value {
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.precision-value.precision-high {
+    color: var(--accent-green);
+}
+
+.precision-value.precision-medium {
+    color: var(--accent-gold);
+}
+
+.precision-value.precision-low {
+    color: var(--severity-high);
+}
+
+.review-count-cell {
+    text-align: right;
+}
+
+/* Botó de revisió d'errors */
+.btn-review-move {
+    padding: 6px 12px;
+    background: var(--accent-purple);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 50px;
+}
+
+.btn-review-move:hover:not(:disabled) {
+    background: #7b1fa2;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(156, 39, 176, 0.3);
+}
+
+.btn-review-move.completed {
+    background: var(--accent-green);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.btn-review-move:disabled {
+    cursor: not-allowed;
+}
+
+.no-errors {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Mode e-paper */
+body.epaper-mode .opening-move-row {
+    background: #e6e6e6;
+    border: 1px solid #cfcfcf;
+}
+
+body.epaper-mode .btn-review-move {
+    background: #555;
+    color: #f2f2f2;
+}
+
+body.epaper-mode .btn-review-move.completed {
+    background: #444;
+}
+
+/* ----------------------------------------------------------------------------
+   2. CALAIX DE REVISIÓ D'ERRORS
+   ---------------------------------------------------------------------------- */
+
+.move-review-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.move-review-drawer-overlay.open {
+    opacity: 1;
+}
+
+.move-review-drawer-content {
+    background: var(--bg-card);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    border: 1px solid rgba(201, 162, 39, 0.2);
+}
+
+.move-review-drawer-overlay.open .move-review-drawer-content {
+    transform: translateY(0);
+}
+
+/* Header del calaix */
+.drawer-header {
+    padding: 20px;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.drawer-header h3 {
+    margin: 0;
+    color: var(--accent-gold);
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+}
+
+.btn-close-drawer {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 5px 10px;
+    transition: color 0.2s ease;
+}
+
+.btn-close-drawer:hover {
+    color: var(--text-primary);
+}
+
+/* Cos del calaix */
+.drawer-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.error-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Item d'error individual */
+.error-item {
+    background: var(--bg-warm);
+    border-radius: 8px;
+    padding: 12px;
+    border-left: 4px solid var(--accent-purple);
+    transition: all 0.2s ease;
+}
+
+.error-item:hover {
+    background: rgba(201, 162, 39, 0.08);
+    border-left-color: var(--accent-gold);
+}
+
+.error-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.1);
+}
+
+.error-number {
+    font-weight: bold;
+    color: var(--accent-gold);
+}
+
+.error-date {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.error-quality {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.error-quality.quality-mistake {
+    background: var(--severity-low);
+    color: #1a1410;
+}
+
+.error-quality.quality-blunder {
+    background: var(--severity-high);
+    color: white;
+}
+
+.error-quality.quality-inaccuracy {
+    background: var(--severity-med);
+    color: white;
+}
+
+.error-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.error-details strong {
+    color: var(--accent-gold);
+}
+
+.error-comment {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(201, 162, 39, 0.05);
+    border-radius: 4px;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* Footer del calaix */
+.drawer-footer {
+    padding: 20px;
+    border-top: 1px solid rgba(201, 162, 39, 0.2);
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* Mode e-paper pel calaix */
+body.epaper-mode .move-review-drawer-content {
+    background: #e6e6e6;
+    border: 1px solid #cfcfcf;
+    box-shadow: none;
+}
+
+body.epaper-mode .error-item {
+    background: #f2f2f2;
+    border-left-color: #555;
+}
+
+body.epaper-mode .drawer-header h3 {
+    color: #222;
+}
+
+/* ----------------------------------------------------------------------------
+   3. FEEDBACK VISUAL DURANT LA PRÀCTICA
+   ---------------------------------------------------------------------------- */
+
+.practice-feedback {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px 30px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    z-index: 1000;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    animation: feedbackPulse 0.5s ease;
+}
+
+.practice-feedback.feedback-success {
+    background: var(--accent-green);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.practice-feedback.feedback-error {
+    background: var(--severity-high);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+@keyframes feedbackPulse {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.05); }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Mode e-paper pel feedback */
+body.epaper-mode .practice-feedback.feedback-success {
+    background: #444;
+    color: #f2f2f2;
+    border: 2px solid #222;
+}
+
+body.epaper-mode .practice-feedback.feedback-error {
+    background: #666;
+    color: #f2f2f2;
+    border: 2px solid #222;
+}
+
+/* ----------------------------------------------------------------------------
+   4. DESTACATS AL TAULER
+   ---------------------------------------------------------------------------- */
+
+.highlight-hint {
+    box-shadow: inset 0 0 8px 5px var(--accent-purple) !important;
+    background-color: rgba(156, 39, 176, 0.5) !important;
+    animation: pulse-hint 1.5s infinite;
+}
+
+@keyframes pulse-hint {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+}
+
+.highlight-target {
+    box-shadow: inset 0 0 8px 5px var(--accent-gold) !important;
+    background-color: rgba(201, 162, 39, 0.4) !important;
+}
+
+/* Mode e-paper pels destacats */
+body.epaper-mode .highlight-hint {
+    box-shadow: inset 0 0 0 3px #5c5c5c !important;
+    background-color: #d1d1d1 !important;
+    background-image: repeating-linear-gradient(
+        45deg,
+        #d1d1d1 0,
+        #d1d1d1 6px,
+        #c1c1c1 6px,
+        #c1c1c1 12px
+    );
+}
+
+body.epaper-mode .highlight-target {
+    box-shadow: inset 0 0 0 3px #444 !important;
+    background-color: #e1e1e1 !important;
+}
+
+/* ----------------------------------------------------------------------------
+   5. MODAL DE PRÀCTICA COMPLETADA
+   ---------------------------------------------------------------------------- */
+
+#practice-complete-modal .modal-content {
+    text-align: center;
+}
+
+#practice-complete-modal .modal-title {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+}
+
+.practice-complete-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+/* ----------------------------------------------------------------------------
+   6. MODAL D'ANÀLISI DE GEMINI
+   ---------------------------------------------------------------------------- */
+
+#gemini-analysis-modal .modal-content {
+    max-width: 500px;
+}
+
+.gemini-analysis-content {
+    padding: 15px;
+    background: var(--bg-warm);
+    border-radius: 8px;
+    margin: 15px 0;
+    line-height: 1.6;
+    color: var(--text-primary);
+    text-align: left;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#btn-close-gemini {
+    margin-top: 10px;
+}
+
+/* Mode e-paper pel modal de Gemini */
+body.epaper-mode .gemini-analysis-content {
+    background: #f2f2f2;
+    color: #222;
+}
+
+/* ----------------------------------------------------------------------------
+   7. RESPONSIVE - DISPOSITIUS MÒBILS
+   ---------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+    .opening-move-row {
+        grid-template-columns: 70px 1fr 60px;
+        padding: 8px 10px;
+    }
+
+    .move-number {
+        font-size: 0.85rem;
+    }
+
+    .precision-value {
+        font-size: 1rem;
+    }
+
+    .btn-review-move {
+        padding: 5px 10px;
+        font-size: 0.8rem;
+        min-width: 45px;
+    }
+
+    .move-review-drawer-content {
+        max-height: 90vh;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .drawer-header {
+        padding: 15px;
+    }
+
+    .drawer-header h3 {
+        font-size: 1.1rem;
+    }
+
+    .drawer-body {
+        padding: 15px;
+    }
+
+    .drawer-footer {
+        padding: 15px;
+        flex-direction: column;
+    }
+
+    .drawer-footer .btn {
+        width: 100%;
+    }
+
+    .error-item {
+        padding: 10px;
+    }
+
+    .error-details {
+        font-size: 0.85rem;
+    }
+
+    .practice-feedback {
+        padding: 15px 20px;
+        font-size: 1rem;
+    }
+
+    .gemini-analysis-content {
+        padding: 12px;
+        max-height: 300px;
+        font-size: 0.9rem;
+    }
+}
+
+/* ----------------------------------------------------------------------------
+   8. RESPONSIVE - TAULETES
+   ---------------------------------------------------------------------------- */
+
+@media (min-width: 601px) and (max-width: 1024px) {
+    .move-review-drawer-content {
+        max-width: 500px;
+    }
+
+    .opening-move-row {
+        grid-template-columns: 75px 1fr 65px;
+    }
+}
+
+/* ----------------------------------------------------------------------------
+   9. AJUSTOS PER ANIMACIONS REDUÏDES
+   ---------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .move-review-drawer-overlay,
+    .move-review-drawer-content {
+        transition: none !important;
+    }
+
+    .practice-feedback {
+        animation: none !important;
+    }
+
+    .highlight-hint {
+        animation: none !important;
+    }
+
+    .opening-move-row {
+        transition: none !important;
+    }
+
+    .error-item {
+        transition: none !important;
+    }
+}
+
+/* ============================================================================
+   FI DELS ESTILS
+   ============================================================================ */
