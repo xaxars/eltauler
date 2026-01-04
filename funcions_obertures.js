@@ -643,6 +643,12 @@ function onDropPractice(source, target) {
         return 'snapback';
     }
 
+    if (typeof clearEngineMoveHighlights === 'function') {
+        clearEngineMoveHighlights();
+    } else {
+        $('#myBoard .square-55d63').removeClass('engine-move');
+    }
+
     // Intentar fer el moviment
     const move = game.move({
         from: source,
@@ -678,6 +684,11 @@ function highlightPracticeTapSelection(square) {
 function commitPracticeMoveFromTap(from, to) {
     const move = game.move({ from: from, to: to, promotion: 'q' });
     if (move === null) return false;
+    if (typeof clearEngineMoveHighlights === 'function') {
+        clearEngineMoveHighlights();
+    } else {
+        $('#myBoard .square-55d63').removeClass('engine-move');
+    }
     board.position(game.fen());
     checkPracticeMove(move);
     return true;
@@ -789,6 +800,13 @@ function applyPracticeOpponentMove(uciMove) {
         return;
     }
     board.position(game.fen());
+    if (typeof highlightEngineMove === 'function') {
+        highlightEngineMove(uciMove.slice(0, 2), uciMove.slice(2, 4));
+    } else {
+        $('#myBoard .square-55d63').removeClass('engine-move');
+        $(`#myBoard .square-55d63[data-square='${uciMove.slice(0, 2)}']`).addClass('engine-move');
+        $(`#myBoard .square-55d63[data-square='${uciMove.slice(2, 4)}']`).addClass('engine-move');
+    }
 }
 
 function resetPracticeSequence(targetStep = 1) {
