@@ -1853,6 +1853,48 @@
             padding: 40px 20px;
         }
 
+        .lesson-move-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .lesson-move-table th,
+        .lesson-move-table td {
+            text-align: left;
+            padding: 10px 12px;
+        }
+
+        .lesson-move-table thead th {
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+        }
+
+        .lesson-move-table tbody tr {
+            background: rgba(201, 162, 39, 0.05);
+        }
+
+        .lesson-move-table tbody tr + tr {
+            border-top: 1px solid rgba(201, 162, 39, 0.08);
+        }
+
+        .lesson-move-table td:last-child {
+            font-weight: 600;
+        }
+
+        .lesson-move-table .good {
+            color: var(--severity-low);
+        }
+
+        .lesson-move-table .warning {
+            color: var(--severity-med);
+        }
+
+        .lesson-move-table .danger {
+            color: var(--severity-high);
+        }
+
         .btn-large {
             font-size: 1.2rem;
             padding: 16px 32px;
@@ -2312,6 +2354,25 @@
                     <button class="btn btn-primary btn-large" id="btn-analyze-lessons">
                         🔍 Analitzar últimes 10 partides
                     </button>
+                </div>
+
+                <div id="lesson-first-moves-stats" style="display:none;">
+                    <div class="lesson-card">
+                        <div class="lesson-card-header">
+                            <span class="lesson-icon">📊</span>
+                            <h3>Precisió dels 10 primers moviments</h3>
+                        </div>
+                        <div class="lesson-card-body">
+                            <div class="lesson-color-section">
+                                <h4>Moviment Blanques</h4>
+                                <div id="lesson-first-moves-white"></div>
+                            </div>
+                            <div class="lesson-color-section">
+                                <h4>Moviment Negres</h4>
+                                <div id="lesson-first-moves-black"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Errors greus -->

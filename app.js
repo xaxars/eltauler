@@ -7048,6 +7048,72 @@ function calculatePrecisionRange(gameEntry, startMove, endMove) {
     return Math.round((goodMoves / movesInRange.length) * 100);
 }
 
+function calculateFirstMovesPrecision(recentGames, maxMove = 10) {
+    const buildStats = () => Array.from({ length: maxMove }, () => ({ good: 0, total: 0 }));
+    const stats = {
+        white: buildStats(),
+        black: buildStats()
+    };
+
+    recentGames.forEach(game => {
+        if (!Array.isArray(game.review) || game.review.length === 0) return;
+        const colorKey = game.playerColor === 'w' ? 'white' : 'black';
+        game.review.forEach(move => {
+            const moveNumber = Number(move.moveNumber);
+            if (!moveNumber || moveNumber < 1 || moveNumber > maxMove) return;
+            const idx = moveNumber - 1;
+            stats[colorKey][idx].total += 1;
+            if (move.quality === 'excel' || move.quality === 'good') {
+                stats[colorKey][idx].good += 1;
+            }
+        });
+    });
+
+    return stats;
+}
+
+function renderFirstMovesPrecision(stats) {
+    const renderTable = (entries, container) => {
+        const rows = entries.map((entry, idx) => {
+            const percentage = entry.total > 0
+                ? Math.round((entry.good / entry.total) * 100)
+                : null;
+            const value = percentage === null ? '—' : `${percentage}%`;
+            const className = percentage === null
+                ? ''
+                : percentage >= 70
+                    ? 'good'
+                    : percentage >= 50
+                        ? 'warning'
+                        : 'danger';
+            return `
+                <tr>
+                    <td>${idx + 1}</td>
+                    <td class="${className}">${value}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const table = `
+            <table class="lesson-move-table">
+                <thead>
+                    <tr>
+                        <th>Moviment</th>
+                        <th>Precisió mitjana</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        `;
+        container.html(table);
+    };
+
+    renderTable(stats.white, $('#lesson-first-moves-white'));
+    renderTable(stats.black, $('#lesson-first-moves-black'));
+}
+
 // Analitzar rendiment d'obertures
 function analyzeOpeningPerformance(recentGames) {
     if (recentGames.length === 0) {
@@ -7309,7 +7375,10 @@ async function performLessonAnalysis() {
     $('#lesson-severe-errors').hide();
     $('#lesson-library').hide();
     $('#lesson-save-action').hide();
-    $('#lesson-main-action').hide();
+    $('#lesson-first-moves-stats').hide();
+
+    const analyzeButton = $('#btn-analyze-lessons');
+    analyzeButton.prop('disabled', true);
 
     const recentGames = gameHistory.slice(-10).filter(g =>
         g.moves && g.moves.length >= 6
@@ -7319,7 +7388,7 @@ async function performLessonAnalysis() {
 
     if (openingStats.totalGames === 0) {
         $('#lesson-loading').hide();
-        $('#lesson-main-action').show();
+        analyzeButton.prop('disabled', false);
         alert('Necessites almenys una partida guardada per analitzar.');
         return;
     }
@@ -7430,6 +7499,11 @@ async function performLessonAnalysis() {
     $('#lesson-severe-errors').show();
     renderLessonErrors();
     updateLessonSaveState();
+
+    const firstMovesPrecision = calculateFirstMovesPrecision(recentGames);
+    renderFirstMovesPrecision(firstMovesPrecision);
+    $('#lesson-first-moves-stats').show();
+    analyzeButton.prop('disabled', false);
 
     // Si l'àrea crítica són obertures, mostrar anàlisi detallat
     if (criticalArea === 'obertures') {
@@ -7776,6 +7850,7 @@ function setupLessonEvents() {
         $('#lesson-severe-errors').hide();
         $('#lesson-library').hide();
         $('#lesson-save-action').hide();
+        $('#lesson-first-moves-stats').hide();
         $('#lesson-main-action').show();
 
         renderLessonErrors();
