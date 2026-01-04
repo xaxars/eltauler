@@ -609,6 +609,8 @@ async function preparePracticeSequenceFromError(errorToPractice, initialFen) {
 
         openingPracticeState.practiceSequence = {
             initialFen,
+            afterPlayerFen,
+            afterOpponentFen,
             step1: { playerMove: playerMove1 },
             opponentMove: { move: opponentMove },
             step2: { playerMove: playerMove2 },
@@ -756,7 +758,8 @@ function checkPracticeMove(move) {
 
     if (moveUci !== expectedMove) {
         showFeedback('error', '✗ No és el millor moviment. Torna-ho a provar.');
-        resetPracticeSequence();
+        const targetStep = openingPracticeState.practiceStep === 2 ? 2 : 1;
+        resetPracticeSequence(targetStep);
         return;
     }
 
@@ -788,14 +791,28 @@ function applyPracticeOpponentMove(uciMove) {
     board.position(game.fen());
 }
 
-function resetPracticeSequence() {
-    if (openingPracticeState.currentPracticeFen) {
-        game.load(openingPracticeState.currentPracticeFen);
+function resetPracticeSequence(targetStep = 1) {
+    const sequence = openingPracticeState.practiceSequence;
+    const shouldResetToStep2 = targetStep === 2 && sequence?.afterOpponentFen;
+    const targetFen = shouldResetToStep2
+        ? sequence.afterOpponentFen
+        : openingPracticeState.currentPracticeFen;
+
+    if (targetFen) {
+        game.load(targetFen);
         board.position(game.fen());
     }
+
+    if (shouldResetToStep2) {
+        openingPracticeState.practiceStep = 2;
+        openingPracticeState.targetMove = sequence.step2.playerMove;
+        updatePracticeStatus('Torna-ho a provar des de la segona part.');
+        return;
+    }
+
     openingPracticeState.practiceStep = 1;
-    if (openingPracticeState.practiceSequence) {
-        openingPracticeState.targetMove = openingPracticeState.practiceSequence.step1.playerMove;
+    if (sequence) {
+        openingPracticeState.targetMove = sequence.step1.playerMove;
     }
     updatePracticeStatus('Torna-ho a provar des del principi.');
 }
