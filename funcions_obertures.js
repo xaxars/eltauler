@@ -29,6 +29,8 @@ let openingPracticeState = {
 };
 
 let openingGeminiHintPending = false;
+let openingLessonReviewPending = false;
+let openingLessonReviewData = null;
 
 const OPENING_PRACTICE_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 let practiceTapEnabled = false;
@@ -178,6 +180,178 @@ function renderDetailedOpeningStats(stats) {
         const moveNumber = $(this).data('move');
         openMoveReviewDrawer(color, moveNumber, stats);
     });
+}
+
+// ========================================================================
+// 2.1. RESENYA AMB GEMINI PER A LLIÇÓ
+// ========================================================================
+
+function getLessonGeminiApiKey() {
+    if (typeof geminiApiKey !== 'undefined' && geminiApiKey) {
+        return geminiApiKey;
+    }
+    return localStorage.getItem('chess_gemini_api_key');
+}
+
+function getLessonGeminiModelId() {
+    if (typeof GEMINI_MODEL_ID !== 'undefined' && GEMINI_MODEL_ID) {
+        return GEMINI_MODEL_ID;
+    }
+    return 'gemini-3-flash-preview';
+}
+
+function formatLessonQualityCounts(counts) {
+    const labels = {
+        inaccuracy: 'imprecisions',
+        mistake: 'errors',
+        blunder: 'blunders',
+        unknown: 'desconeguts'
+    };
+    return Object.entries(counts)
+        .filter(([, value]) => value > 0)
+        .map(([key, value]) => `${labels[key] || key} ${value}`)
+        .join(', ');
+}
+
+function buildLessonReviewSummary(stats, totalGames) {
+    const items = [];
+    let totalErrors = 0;
+
+    ['white', 'black'].forEach(colorKey => {
+        stats[colorKey].forEach((moveData, idx) => {
+            const errors = moveData.errors || [];
+            if (!errors.length) return;
+            const avgCpLoss = Math.round(errors.reduce((sum, err) => sum + (err.cpLoss || 0), 0) / errors.length);
+            const qualityCounts = errors.reduce((acc, err) => {
+                const key = err.quality || 'unknown';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+            totalErrors += errors.length;
+            items.push({
+                color: colorKey,
+                moveNumber: idx + 1,
+                errors: errors.length,
+                avgCpLoss,
+                qualityCounts
+            });
+        });
+    });
+
+    items.sort((a, b) => {
+        if (b.errors !== a.errors) return b.errors - a.errors;
+        return b.avgCpLoss - a.avgCpLoss;
+    });
+
+    return {
+        totalGames,
+        totalErrors,
+        items: items.slice(0, 6)
+    };
+}
+
+function buildLessonReviewPrompt(summary) {
+    const itemsText = summary.items.length
+        ? summary.items.map((item, idx) => {
+            const colorLabel = item.color === 'white' ? 'Blanques' : 'Negres';
+            const qualityText = formatLessonQualityCounts(item.qualityCounts);
+            const qualityLine = qualityText ? ` | Tipus: ${qualityText}` : '';
+            return `${idx + 1}. ${colorLabel} moviment ${item.moveNumber}: ${item.errors} errors, pèrdua mitjana ${item.avgCpLoss} cp${qualityLine}`;
+        }).join('\n')
+        : 'No hi ha errors destacables.';
+
+    return `Ets un entrenador d'escacs expert. Genera una ressenya de millora de les obertures basada en l'anàlisi de ${summary.totalGames} partides recents.
+
+DADES CLAU:
+${itemsText}
+
+INSTRUCCIONS:
+- Escriu en català.
+- No facis servir notació algebraica (e4, Nf3, etc.).
+- Parla de peces i conceptes (control del centre, desenvolupament, seguretat del rei).
+- Dona entre 3 i 5 recomanacions concretes i accionables.
+- Mantén un to clar, motivador i directe.
+- Màxim 250 paraules.
+
+Genera la ressenya ara:`;
+}
+
+function updateLessonReviewUI(summary) {
+    const container = $('#lesson-review');
+    const reviewBox = $('#lesson-gemini-review');
+    const btn = $('#btn-generate-lesson-review');
+
+    if (!container.length) return;
+
+    if (!summary || summary.totalGames === 0) {
+        container.hide();
+        reviewBox.hide().empty();
+        return;
+    }
+
+    container.show();
+    reviewBox.hide().empty();
+    btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
+}
+
+async function generateLessonReview() {
+    if (openingLessonReviewPending) return;
+    if (!openingLessonReviewData || openingLessonReviewData.totalGames === 0) {
+        alert('Primer has d\'analitzar les obertures.');
+        return;
+    }
+
+    const apiKey = getLessonGeminiApiKey();
+    if (!apiKey) {
+        alert('Configura la clau de Gemini per generar ressenyes.');
+        return;
+    }
+
+    const btn = $('#btn-generate-lesson-review');
+    const reviewBox = $('#lesson-gemini-review');
+    btn.prop('disabled', true).text('⚔️ Generant ressenya...');
+    openingLessonReviewPending = true;
+
+    try {
+        const prompt = buildLessonReviewPrompt(openingLessonReviewData);
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${getLessonGeminiModelId()}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.8,
+                        maxOutputTokens: 1200,
+                        topP: 0.95,
+                        topK: 40
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`Gemini error ${response.status}: ${errorBody}`);
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('').trim();
+        if (!text) throw new Error('Resposta buida de Gemini');
+
+        const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+        reviewBox.html(`
+            <h4>📋 Ressenya d'obertures</h4>
+            <div>${formatted}</div>
+        `).fadeIn();
+    } catch (error) {
+        console.error('[Lesson Review] Error:', error);
+        reviewBox.html('<div style="color:var(--severity-high);">❌ No s\'ha pogut generar la ressenya. Revisa la clau de Gemini.</div>').fadeIn();
+    } finally {
+        openingLessonReviewPending = false;
+        btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
+    }
 }
 
 // ============================================================================
@@ -1386,6 +1560,8 @@ function analyzeLastOpenings() {
     const stats = buildDetailedOpeningStats(entries);
     loadCompletedPractices();
     renderDetailedOpeningStats(stats);
+    openingLessonReviewData = buildLessonReviewSummary(stats, entries.length);
+    updateLessonReviewUI(openingLessonReviewData);
     return stats;
 }
 
@@ -1418,6 +1594,10 @@ function initOpeningPracticeSystem() {
         if (openingPracticeState.isPracticing) {
             startRandomOpeningPracticeFromLesson();
         }
+    });
+
+    $('#btn-generate-lesson-review').off('click.lessonReview').on('click.lessonReview', function() {
+        generateLessonReview();
     });
 
     console.log("Sistema de pràctica d'obertures inicialitzat");
