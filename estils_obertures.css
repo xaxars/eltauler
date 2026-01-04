@@ -112,6 +112,7 @@ body.epaper-mode .btn-review-move.completed {
 
 .lesson-review {
     margin-top: 14px;
+    margin-bottom: 16px;
     padding: 16px;
     background: var(--bg-warm);
     border-radius: 12px;
@@ -119,9 +120,6 @@ body.epaper-mode .btn-review-move.completed {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    position: sticky;
-    bottom: 16px;
-    z-index: 2;
 }
 
 .lesson-review .btn {
