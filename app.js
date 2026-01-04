@@ -5309,6 +5309,9 @@ function setupEvents() {
         $('#game-screen').hide();
         $('#start-screen').hide();
         $('#lesson-screen').show();
+        if (typeof showStoredLessonReview === 'function') {
+            showStoredLessonReview();
+        }
     });
     $('#btn-analyze-openings').click(() => { analyzeLastOpenings(); });
     $('#btn-back-lesson').click(() => { $('#lesson-screen').hide(); $('#start-screen').show(); });

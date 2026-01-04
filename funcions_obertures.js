@@ -31,6 +31,7 @@ let openingPracticeState = {
 let openingGeminiHintPending = false;
 let openingLessonReviewPending = false;
 let openingLessonReviewData = null;
+const OPENING_LESSON_REVIEW_STORAGE = 'eltauler_opening_lesson_review';
 
 const OPENING_PRACTICE_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 let practiceTapEnabled = false;
@@ -276,21 +277,108 @@ INSTRUCCIONS:
 Genera la ressenya ara:`;
 }
 
+function formatLessonGeminiReviewText(text) {
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+
+function buildOpeningMovesList(entries) {
+    const initMoves = () => Array.from({ length: 10 }, () => []);
+    const list = { white: initMoves(), black: initMoves() };
+
+    (entries || []).forEach(entry => {
+        const moves = Array.isArray(entry.moves) ? entry.moves : [];
+        for (let idx = 0; idx < 10; idx++) {
+            const whiteMove = moves[idx * 2];
+            const blackMove = moves[idx * 2 + 1];
+            if (whiteMove && !list.white[idx].includes(whiteMove)) {
+                list.white[idx].push(whiteMove);
+            }
+            if (blackMove && !list.black[idx].includes(blackMove)) {
+                list.black[idx].push(blackMove);
+            }
+        }
+    });
+
+    return list;
+}
+
+function formatOpeningMovesListHtml(list) {
+    if (!list || !Array.isArray(list.white) || !Array.isArray(list.black)) return '';
+    const renderSection = (label, moves) => {
+        const items = moves.map((entry, idx) => {
+            const content = entry.length ? entry.join(', ') : '—';
+            return `<li><strong>${idx + 1}.</strong> ${content}</li>`;
+        }).join('');
+        return `
+            <div class="lesson-opening-move-section">
+                <div class="lesson-opening-move-title">${label}</div>
+                <ul class="lesson-opening-move-list">${items}</ul>
+            </div>
+        `;
+    };
+
+    return `
+        <div class="lesson-opening-move-block">
+            <div class="lesson-opening-move-subtitle">Llistat de moviments (1-10)</div>
+            ${renderSection('Blanques', list.white)}
+            ${renderSection('Negres', list.black)}
+        </div>
+    `;
+}
+
+function saveLessonGeminiReview(reviewData) {
+    if (!reviewData) return;
+    localStorage.setItem(OPENING_LESSON_REVIEW_STORAGE, JSON.stringify(reviewData));
+}
+
+function loadLessonGeminiReview() {
+    const stored = localStorage.getItem(OPENING_LESSON_REVIEW_STORAGE);
+    if (!stored) return null;
+    try {
+        return JSON.parse(stored);
+    } catch (error) {
+        console.warn('[Lesson Review] Dades guardades corruptes.', error);
+        return null;
+    }
+}
+
+function renderLessonGeminiReviewHtml(reviewData) {
+    if (!reviewData || !reviewData.text) return '';
+    const formatted = formatLessonGeminiReviewText(reviewData.text);
+    const movesHtml = formatOpeningMovesListHtml(reviewData.movesList);
+    return `
+        <h4>📋 Ressenya d'obertures</h4>
+        ${movesHtml}
+        <div>${formatted}</div>
+    `;
+}
+
 function updateLessonReviewUI(summary) {
     const container = $('#lesson-review');
     const reviewBox = $('#lesson-gemini-review');
     const btn = $('#btn-generate-lesson-review');
+    const storedReview = loadLessonGeminiReview();
 
     if (!container.length) return;
 
     if (!summary || summary.totalGames === 0) {
-        container.hide();
-        reviewBox.hide().empty();
+        if (storedReview && storedReview.text) {
+            container.show();
+            reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).fadeIn();
+        } else {
+            container.hide();
+            reviewBox.hide().empty();
+        }
+        btn.prop('disabled', true);
         return;
     }
 
     container.show();
-    reviewBox.hide().empty();
+    if (storedReview && storedReview.text) {
+        reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).show();
+    } else {
+        reviewBox.hide().empty();
+    }
     btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
 }
 
@@ -340,11 +428,10 @@ async function generateLessonReview() {
         const text = data?.candidates?.[0]?.content?.parts?.map(part => part.text).join('').trim();
         if (!text) throw new Error('Resposta buida de Gemini');
 
-        const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-        reviewBox.html(`
-            <h4>📋 Ressenya d'obertures</h4>
-            <div>${formatted}</div>
-        `).fadeIn();
+        const movesList = buildOpeningMovesList(gameHistory.slice(-10));
+        const reviewData = { text, movesList, generatedAt: new Date().toISOString() };
+        saveLessonGeminiReview(reviewData);
+        reviewBox.html(renderLessonGeminiReviewHtml(reviewData)).fadeIn();
     } catch (error) {
         console.error('[Lesson Review] Error:', error);
         reviewBox.html('<div style="color:var(--severity-high);">❌ No s\'ha pogut generar la ressenya. Revisa la clau de Gemini.</div>').fadeIn();
@@ -1120,6 +1207,22 @@ function returnToLessonScreen(reopenDrawer = false) {
             openingPracticeState.lastPracticeMoveNumber,
             stats
         );
+    }
+}
+
+function showStoredLessonReview() {
+    const container = $('#lesson-review');
+    const reviewBox = $('#lesson-gemini-review');
+    const btn = $('#btn-generate-lesson-review');
+    const storedReview = loadLessonGeminiReview();
+    const hasSummary = openingLessonReviewData && openingLessonReviewData.totalGames > 0;
+
+    if (!container.length) return;
+
+    if (storedReview && storedReview.text) {
+        container.show();
+        reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).show();
+        btn.prop('disabled', !hasSummary).text('⚔️ Ressenya d\'obertures');
     }
 }
 

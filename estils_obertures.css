@@ -145,6 +145,36 @@ body.epaper-mode .btn-review-move.completed {
     font-size: 1.1rem;
 }
 
+.lesson-opening-move-block {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.lesson-opening-move-subtitle {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.lesson-opening-move-section {
+    margin-bottom: 8px;
+}
+
+.lesson-opening-move-title {
+    font-weight: 600;
+    color: var(--accent-gold);
+    margin-bottom: 4px;
+}
+
+.lesson-opening-move-list {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.lesson-opening-move-list li {
+    margin-bottom: 4px;
+}
+
 body.epaper-mode .lesson-review {
     background: #e6e6e6;
     border: 1px solid #cfcfcf;
