@@ -362,6 +362,7 @@ function updateLessonReviewUI(summary) {
     const container = $('#lesson-review');
     const reviewBox = $('#lesson-gemini-review');
     const btn = $('#btn-generate-lesson-review');
+    const practiceArea = $('#lesson-practice-area');
     const storedReview = loadLessonGeminiReview();
 
     if (!container.length) return;
@@ -370,25 +371,25 @@ function updateLessonReviewUI(summary) {
         if (storedReview && storedReview.text) {
             container.show();
             reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).fadeIn();
-            initLessonPracticeBoard();
         } else {
             container.hide();
             reviewBox.hide().empty();
-            $('#lesson-practice-area').hide();
         }
         btn.prop('disabled', true);
+        practiceArea.show();
+        initLessonPracticeBoard();
         return;
     }
 
     container.show();
     if (storedReview && storedReview.text) {
         reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).show();
-        initLessonPracticeBoard();
     } else {
         reviewBox.hide().empty();
-        $('#lesson-practice-area').hide();
     }
     btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
+    practiceArea.show();
+    initLessonPracticeBoard();
 }
 
 async function generateLessonReview() {
