@@ -565,6 +565,32 @@
         .btn-primary { background: linear-gradient(135deg, var(--accent-gold) 0%, #a68522 100%); color: var(--bg-dark); }
         .btn-secondary { background: linear-gradient(135deg, var(--accent-green) 0%, #3a6347 100%); color: var(--accent-cream); }
         .btn-blue { background: linear-gradient(135deg, var(--accent-blue) 0%, #0d47a1 100%); color: white; }
+
+        .opening-section {
+            margin-top: 12px;
+            background: var(--bg-warm);
+            border: 1px solid rgba(201, 162, 39, 0.18);
+            border-radius: 14px;
+            padding: 14px;
+            text-align: center;
+        }
+        .opening-section-title {
+            font-family: 'Cinzel', serif;
+            color: var(--accent-gold);
+            font-size: 1.05rem;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .opening-section-desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+        .btn-opening {
+            background: linear-gradient(135deg, #d6b24a 0%, #b48a22 100%);
+            color: #2b2118;
+            box-shadow: 0 4px 12px rgba(201, 162, 39, 0.35);
+        }
         
         body.device-tablet .menu-buttons,
         body.device-desktop .menu-buttons {
@@ -1679,6 +1705,11 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary" id="btn-league" style="background: linear-gradient(135deg, #8d6e63 0%, #5d4037 100%); color: #f4e4bc;">🏆 Lliga</button>
+                <div class="opening-section">
+                    <div class="opening-section-title">Secció d'obertura</div>
+                    <div class="opening-section-desc">Explora idees bàsiques per començar la partida.</div>
+                    <button class="btn btn-opening" id="btn-opening">OBERTURA</button>
+                </div>
                 <button class="btn btn-secondary" id="btn-bundle-menu" style="background: linear-gradient(135deg, #8b8076 0%, #60564d 100%); color: #f4e4bc;">
                     📚 Revisa Errors
                     <span style="font-size:0.75rem; opacity:0.8;" id="bundle-info">Cap error desat</span>
