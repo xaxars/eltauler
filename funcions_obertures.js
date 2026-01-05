@@ -269,6 +269,8 @@ ${itemsText}
 INSTRUCCIONS:
 - Escriu en català.
 - No facis servir notació algebraica (e4, Nf3, etc.).
+- No incloguis llistes de moviments ni cap tipus de coordenada (files, columnes o caselles).
+- Menciona les peces pel seu nom i posició relativa al costat del rei o de la reina.
 - Parla de peces i conceptes (control del centre, desenvolupament, seguretat del rei).
 - Dona entre 3 i 5 recomanacions concretes i accionables.
 - Mantén un to clar, motivador i directe.
