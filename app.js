@@ -5251,11 +5251,11 @@ function renderOpeningStatsScreen() {
 
 function initOpeningBundleBoard() {
     if (openingBundleBoard) return;
-    const boardEl = document.getElementById('bundle-board');
+    const boardEl = document.getElementById('opening-board');
     if (!boardEl) return;
     openingPracticeGame = new Chess();
     openingPracticeMoveCount = 0;
-    openingBundleBoard = Chessboard('bundle-board', {
+    openingBundleBoard = Chessboard('opening-board', {
         draggable: true,
         position: 'start',
         onDragStart: (source, piece) => {
@@ -5357,6 +5357,9 @@ function setupEvents() {
         resetOpeningPracticeBoard();
         $('#start-screen').hide();
         $('#opening-screen').show();
+        if (openingBundleBoard && typeof openingBundleBoard.resize === 'function') {
+            setTimeout(() => openingBundleBoard.resize(), 50);
+        }
     });
     $('#btn-back-opening').click(() => {
         $('#opening-screen').hide();
