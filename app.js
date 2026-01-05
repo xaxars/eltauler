@@ -26,6 +26,7 @@ let openingBundleBoard = null;
 let openingPracticeGame = null;
 let openingPracticeMoveCount = 0;
 const OPENING_PRACTICE_MAX_PLIES = 20;
+let openingPracticeEngineThinking = false;
 let gameHistory = [];
 let historyBoard = null;
 let historyReplay = null;
@@ -5261,6 +5262,7 @@ function initOpeningBundleBoard() {
         onDragStart: (source, piece) => {
             if (!openingPracticeGame || openingPracticeGame.game_over()) return false;
             if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
+            if (openingPracticeEngineThinking) return false;
             if (openingPracticeGame.turn() === 'w' && piece.search(/^b/) !== -1) return false;
             if (openingPracticeGame.turn() === 'b' && piece.search(/^w/) !== -1) return false;
         },
@@ -5271,6 +5273,11 @@ function initOpeningBundleBoard() {
             if (!move) return 'snapback';
             openingPracticeMoveCount += 1;
             updateOpeningPracticeStatus();
+            if (openingPracticeMoveCount < OPENING_PRACTICE_MAX_PLIES && !openingPracticeGame.game_over()) {
+                if (openingPracticeGame.turn() === 'b') {
+                    requestOpeningPracticeEngineMove();
+                }
+            }
         },
         onSnapEnd: () => {
             if (!openingPracticeGame) return;
@@ -5287,7 +5294,7 @@ function updateOpeningPracticeStatus() {
     if (!noteEl) return;
     const remaining = Math.max(OPENING_PRACTICE_MAX_PLIES - openingPracticeMoveCount, 0);
     if (!openingPracticeGame) {
-        noteEl.textContent = 'Preparat per practicar.';
+        noteEl.textContent = 'Preparat per practicar amb Stockfish.';
         return;
     }
     if (openingPracticeGame.game_over()) {
@@ -5299,17 +5306,30 @@ function updateOpeningPracticeStatus() {
         return;
     }
     const remainingFullMoves = Math.ceil(remaining / 2);
-    noteEl.textContent = `Moviments restants: ${remainingFullMoves} per bàndol.`;
+    noteEl.textContent = `Moviments restants: ${remainingFullMoves} per bàndol (vs Stockfish màxim).`;
 }
 
 function resetOpeningPracticeBoard() {
     openingPracticeGame = new Chess();
     openingPracticeMoveCount = 0;
+    openingPracticeEngineThinking = false;
     if (openingBundleBoard) {
         openingBundleBoard.position('start');
         if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
     }
     updateOpeningPracticeStatus();
+}
+
+function requestOpeningPracticeEngineMove() {
+    if (!openingPracticeGame || openingPracticeGame.game_over()) return;
+    if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return;
+    if (!stockfish && !ensureStockfish()) return;
+    openingPracticeEngineThinking = true;
+    try { stockfish.postMessage('setoption name UCI_LimitStrength value false'); } catch (e) {}
+    try { stockfish.postMessage('setoption name Skill Level value 20'); } catch (e) {}
+    try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
+    stockfish.postMessage(`position fen ${openingPracticeGame.fen()}`);
+    stockfish.postMessage('go depth 20');
 }
 
 function checkShareSupport() {
@@ -6245,6 +6265,26 @@ function handleEngineMessage(rawMsg) {
         if (pendingEngineFirstMove && playerColor !== game.turn()) {
             pendingEngineFirstMove = false;
             setTimeout(makeEngineMove, 200);
+        }
+        return;
+    }
+
+    if (openingPracticeEngineThinking && msg.indexOf('bestmove') !== -1) {
+        openingPracticeEngineThinking = false;
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
+        if (match && openingPracticeGame) {
+            const move = openingPracticeGame.move({
+                from: match[1],
+                to: match[2],
+                promotion: match[3] || 'q'
+            });
+            if (move) {
+                openingPracticeMoveCount += 1;
+                if (openingBundleBoard) {
+                    openingBundleBoard.position(openingPracticeGame.fen());
+                }
+                updateOpeningPracticeStatus();
+            }
         }
         return;
     }
