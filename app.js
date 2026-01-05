@@ -5329,7 +5329,7 @@ function requestOpeningPracticeEngineMove() {
     try { stockfish.postMessage('setoption name Skill Level value 20'); } catch (e) {}
     try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
     stockfish.postMessage(`position fen ${openingPracticeGame.fen()}`);
-    stockfish.postMessage('go depth 20');
+    stockfish.postMessage('go depth 12');
 }
 
 function checkShareSupport() {
@@ -6270,21 +6270,29 @@ function handleEngineMessage(rawMsg) {
     }
 
     if (openingPracticeEngineThinking && msg.indexOf('bestmove') !== -1) {
-        openingPracticeEngineThinking = false;
         const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
         if (match && openingPracticeGame) {
-            const move = openingPracticeGame.move({
-                from: match[1],
-                to: match[2],
-                promotion: match[3] || 'q'
-            });
-            if (move) {
-                openingPracticeMoveCount += 1;
-                if (openingBundleBoard) {
-                    openingBundleBoard.position(openingPracticeGame.fen());
+            const from = match[1];
+            const to = match[2];
+            const promotion = match[3] || 'q';
+            setTimeout(() => {
+                if (!openingPracticeGame) return;
+                const move = openingPracticeGame.move({
+                    from,
+                    to,
+                    promotion
+                });
+                if (move) {
+                    openingPracticeMoveCount += 1;
+                    if (openingBundleBoard) {
+                        openingBundleBoard.position(openingPracticeGame.fen());
+                    }
+                    updateOpeningPracticeStatus();
                 }
-                updateOpeningPracticeStatus();
-            }
+                openingPracticeEngineThinking = false;
+            }, 2000);
+        } else {
+            openingPracticeEngineThinking = false;
         }
         return;
     }
