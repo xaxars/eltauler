@@ -5198,6 +5198,145 @@ function novaPartida() {
     startGame(false);
 }
 
+function getOpeningStats() {
+    const last10Games = gameHistory.slice(-10);
+    const stats = {
+        white: [],
+        black: []
+    };
+
+    for (let i = 1; i <= 10; i++) {
+        stats.white.push({ move: i, totalPrecision: 0, count: 0, errors: [] });
+        stats.black.push({ move: i, totalPrecision: 0, count: 0, errors: [] });
+    }
+
+    last10Games.forEach((gameEntry) => {
+        if (!gameEntry.review || !gameEntry.review.length) return;
+        const playerColor = gameEntry.playerColor || 'w';
+
+        gameEntry.review.forEach((entry) => {
+            const moveNum = entry.moveNumber;
+            if (moveNum < 1 || moveNum > 10) return;
+
+            const isWhiteMove = (moveNum % 2 === 1 && playerColor === 'w') || (moveNum % 2 === 0 && playerColor === 'b');
+            const targetArray = isWhiteMove ? stats.white : stats.black;
+            const idx = moveNum - 1;
+
+            let precision = 100;
+            if (entry.swing !== undefined) {
+                if (entry.swing <= 20) precision = 100;
+                else if (entry.swing <= 50) precision = 85;
+                else if (entry.swing <= 100) precision = 70;
+                else if (entry.swing <= 200) precision = 50;
+                else precision = 25;
+            }
+
+            targetArray[idx].totalPrecision += precision;
+            targetArray[idx].count++;
+
+            if (precision < 100 && entry.fen) {
+                targetArray[idx].errors.push({
+                    fen: entry.fen,
+                    moveNumber: moveNum,
+                    color: isWhiteMove ? 'w' : 'b',
+                    bestMove: entry.bestMove,
+                    playerMove: entry.playerMove,
+                    swing: entry.swing,
+                    bestMovePv: entry.bestMovePv || []
+                });
+            }
+        });
+    });
+
+    ['white', 'black'].forEach((color) => {
+        stats[color].forEach((stat) => {
+            stat.avgPrecision = stat.count > 0 ? Math.round(stat.totalPrecision / stat.count) : 100;
+            stat.errorCount = stat.errors.filter((error) => (error.swing || 0) > 50).length;
+        });
+    });
+
+    return stats;
+}
+
+function getOpeningPrecisionColor(pct) {
+    if (pct >= 90) return 'var(--accent-green)';
+    if (pct >= 75) return 'var(--accent-gold)';
+    if (pct >= 60) return 'var(--severity-med)';
+    return 'var(--severity-high)';
+}
+
+function renderOpeningStats() {
+    const stats = getOpeningStats();
+    const tbody = document.getElementById('opening-stats-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    for (let i = 0; i < 10; i++) {
+        const whiteStat = stats.white[i];
+        const blackStat = stats.black[i];
+
+        const row = document.createElement('tr');
+
+        const moveCell = document.createElement('td');
+        moveCell.textContent = i + 1;
+        moveCell.style.fontWeight = 'bold';
+        row.appendChild(moveCell);
+
+        const whitePctCell = document.createElement('td');
+        whitePctCell.textContent = whiteStat.count > 0 ? `${whiteStat.avgPrecision}%` : '—';
+        whitePctCell.style.color = getOpeningPrecisionColor(whiteStat.avgPrecision);
+        row.appendChild(whitePctCell);
+
+        const whiteErrCell = document.createElement('td');
+        if (whiteStat.errorCount > 0) {
+            const errSpan = document.createElement('span');
+            errSpan.className = 'opening-error-count';
+            errSpan.textContent = whiteStat.errorCount;
+            whiteErrCell.appendChild(errSpan);
+        } else {
+            const zeroSpan = document.createElement('span');
+            zeroSpan.className = 'opening-error-count zero';
+            zeroSpan.textContent = '0';
+            whiteErrCell.appendChild(zeroSpan);
+        }
+        row.appendChild(whiteErrCell);
+
+        const blackPctCell = document.createElement('td');
+        blackPctCell.textContent = blackStat.count > 0 ? `${blackStat.avgPrecision}%` : '—';
+        blackPctCell.style.color = getOpeningPrecisionColor(blackStat.avgPrecision);
+        row.appendChild(blackPctCell);
+
+        const blackErrCell = document.createElement('td');
+        if (blackStat.errorCount > 0) {
+            const errSpan = document.createElement('span');
+            errSpan.className = 'opening-error-count';
+            errSpan.textContent = blackStat.errorCount;
+            blackErrCell.appendChild(errSpan);
+        } else {
+            const zeroSpan = document.createElement('span');
+            zeroSpan.className = 'opening-error-count zero';
+            zeroSpan.textContent = '0';
+            blackErrCell.appendChild(zeroSpan);
+        }
+        row.appendChild(blackErrCell);
+
+        tbody.appendChild(row);
+    }
+}
+
+function showOpeningScreen() {
+    $('#start-screen').hide();
+    $('#game-screen').hide();
+    $('#stats-screen').hide();
+    $('#league-screen').hide();
+    $('#history-screen').hide();
+    $('#calibration-result-screen').hide();
+    $('#opening-screen').show();
+
+    renderOpeningStats();
+}
+
 function setupEvents() {
     checkShareSupport();
     $('#btn-new-game').click(() => {
@@ -5216,10 +5355,12 @@ function setupEvents() {
         initHistoryBoard();
         renderGameHistory();
     });
+    $('#btn-openings').click(() => { showOpeningScreen(); });
     $('#btn-league').click(() => { if (guardCalibrationAccess()) openLeague(); });
     $('#btn-back-league').click(() => { $('#league-screen').hide(); $('#start-screen').show(); });
     $('#btn-league-new').click(() => { if (guardCalibrationAccess()) { createNewLeague(true); openLeague(); } });
     $('#btn-league-play').click(() => { if (guardCalibrationAccess()) startLeagueRound(); });
+    $('#btn-back-opening').click(() => { $('#opening-screen').hide(); $('#start-screen').show(); });
 
     $('#btn-reset-league').click(() => {
         if (!guardCalibrationAccess()) return;
