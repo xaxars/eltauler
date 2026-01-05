@@ -39,6 +39,22 @@ let tvJeroglyphicsResumePlayback = false;
 let tvJeroglyphicsSolved = false;
 let tvJeroglyphicsIncorrect = false;
 
+// Sistema d'obertures
+let openingErrors = [];
+let openingErrorBoard = null;
+let openingPracticeBoard = null;
+let openingPracticeGame = null;
+let openingPracticeColor = 'w';
+let openingPracticeMoveCount = 0;
+let openingPracticeHistory = [];
+let currentOpeningError = null;
+let openingErrorGame = null;
+let isOpeningErrorSession = false;
+let openingBundleSequence = null;
+let openingBundleStep = 1;
+let lastOpeningGeminiHint = null;
+const OPENING_ERRORS_STORAGE_KEY = 'eltauler_opening_errors';
+
 // Sistema d'IA Adaptativa
 let recentGames = []; 
 let aiDifficulty = 8; 

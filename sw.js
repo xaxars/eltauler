@@ -1,5 +1,5 @@
 // Service Worker per El Tauler PWA
-const CACHE_VERSION = '1.0.5';
+const CACHE_VERSION = '1.0.6';
 const CACHE_NAME = `eltauler-${CACHE_VERSION}`; // He pujat la versió per forçar l'actualització
 const ASSETS_TO_CACHE = [
   './',

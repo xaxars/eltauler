@@ -1626,6 +1626,143 @@
         body.device-mobile .history-actions { order: 3; }
         body.device-mobile .history-progress { order: 4; }
         body.device-mobile .history-review { order: 2; }
+
+        /* Obertures */
+        .opening-stats-section {
+            background: var(--bg-warm);
+            padding: 16px;
+            border-radius: 14px;
+            margin-top: 16px;
+            border: 1px solid rgba(201, 162, 39, 0.15);
+        }
+        .opening-stats-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+            margin-bottom: 4px;
+        }
+        .opening-stats-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        .opening-stats-table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .opening-stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .opening-stats-table thead th {
+            background: rgba(0,0,0,0.2);
+            padding: 10px 8px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-bottom: 1px solid rgba(201,162,39,0.15);
+        }
+        .opening-stats-table tbody td {
+            padding: 10px 8px;
+            text-align: center;
+            border-bottom: 1px solid rgba(201,162,39,0.08);
+        }
+        .opening-stats-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .opening-error-count {
+            cursor: pointer;
+            color: var(--accent-gold);
+            font-weight: bold;
+            text-decoration: underline;
+        }
+        .opening-error-count:hover {
+            color: #f4e4bc;
+        }
+        .opening-error-count.zero {
+            color: var(--accent-green);
+            cursor: default;
+            text-decoration: none;
+        }
+        .opening-practice-section {
+            background: var(--bg-warm);
+            padding: 16px;
+            border-radius: 14px;
+            margin-top: 16px;
+            border: 1px solid rgba(201, 162, 39, 0.15);
+            position: relative;
+        }
+        .opening-practice-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+        }
+        .opening-board-container {
+            max-width: 350px;
+            margin: 0 auto;
+        }
+        #opening-error-board, #opening-practice-board {
+            width: 100%;
+        }
+        .opening-controls {
+            margin-top: 12px;
+            text-align: center;
+        }
+        .opening-status {
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+        .opening-progress {
+            color: var(--accent-gold);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        .opening-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .opening-color-select {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            justify-content: center;
+        }
+        .opening-masterclass-content {
+            background: rgba(0,0,0,0.2);
+            padding: 14px;
+            border-radius: 10px;
+            margin-top: 12px;
+        }
+        .opening-masterclass-text {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .opening-error-success-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            z-index: 10;
+        }
+        body.epaper-mode .opening-stats-section,
+        body.epaper-mode .opening-practice-section {
+            background: #e6e6e6;
+            border: 1px solid #cfcfcf;
+        }
+        body.epaper-mode .opening-stats-table thead th {
+            background: #d9d9d9;
+        }
     </style>
 </head>
 <body>
@@ -1678,6 +1815,7 @@
                         <button class="btn btn-primary" id="btn-league-banner-play" style="margin-top:8px;">🎯 Jugar ara</button>
                     </div>
                 </div>
+                <button class="btn btn-secondary" id="btn-openings" style="background: linear-gradient(135deg, #a08050 0%, #7a6030 100%); color: #f4e4bc;">♞ OBERTURA</button>
                 <button class="btn btn-secondary" id="btn-league" style="background: linear-gradient(135deg, #8d6e63 0%, #5d4037 100%); color: #f4e4bc;">🏆 Lliga</button>
                 <button class="btn btn-secondary" id="btn-bundle-menu" style="background: linear-gradient(135deg, #8b8076 0%, #60564d 100%); color: #f4e4bc;">
                     📚 Revisa Errors
@@ -1964,6 +2102,105 @@
                 <button class="btn btn-primary" id="btn-league-play">Jugar</button>
                 <button class="btn btn-secondary" id="btn-league-new" style="display:none;">Generar nova lliga</button>
                 <button class="btn btn-secondary" id="btn-back-league">Tornar al Menú</button>
+            </div>
+        </div>
+
+        <!-- OPENING SCREEN -->
+        <div id="opening-screen" style="display:none;">
+            <div class="stats-header">
+                <div class="app-logo">♞</div>
+                <h1>Obertures</h1>
+            </div>
+
+            <div class="opening-stats-section">
+                <div class="opening-stats-title">Anàlisi de les últimes 10 partides</div>
+                <div class="opening-stats-subtitle">Moviments 1-10 · Blanques i Negres</div>
+
+                <div class="opening-stats-table-wrap">
+                    <table class="opening-stats-table">
+                        <thead>
+                            <tr>
+                                <th>Mov.</th>
+                                <th>Blanques %</th>
+                                <th>Errors B</th>
+                                <th>Negres %</th>
+                                <th>Errors N</th>
+                            </tr>
+                        </thead>
+                        <tbody id="opening-stats-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="opening-gemini-section">
+                    <button class="btn btn-primary" id="btn-opening-masterclass" style="width:100%; margin-top:16px;">
+                        ✨ Classe Magistral (Gemini)
+                    </button>
+                    <div class="opening-masterclass-content" id="opening-masterclass-content" style="display:none;">
+                        <div class="opening-masterclass-text" id="opening-masterclass-text"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="opening-practice-section">
+                <div class="opening-practice-title">Resoldre errors d'obertura</div>
+                <div class="opening-board-container">
+                    <div id="opening-error-board"></div>
+                </div>
+                <div class="opening-controls">
+                    <div class="opening-status" id="opening-error-status">Selecciona un error del llistat</div>
+                    <div class="opening-buttons">
+                        <button class="btn btn-hint" id="btn-opening-hint">💡 Pista</button>
+                        <button class="btn btn-brain-hint" id="btn-opening-gemini-hint">
+                            <img src="brain.svg" alt="Cervell">
+                            <span>Màxima</span>
+                        </button>
+                        <button class="btn btn-secondary" id="btn-opening-random">🎲 Altre error</button>
+                        <button class="btn btn-secondary" id="btn-opening-back-list">📋 Tornar llistat</button>
+                    </div>
+                </div>
+                <div class="opening-error-success-overlay" id="opening-error-success-overlay" style="display:none;">
+                    <div class="bundle-success-content">
+                        <div class="bundle-success-icon">✅</div>
+                        <div class="bundle-success-title">Error d'obertura resolt!</div>
+                        <div class="bundle-success-actions">
+                            <button class="btn btn-primary" id="btn-opening-error-another">🎲 Un altre</button>
+                            <button class="btn btn-secondary" id="btn-opening-error-back">📋 Tornar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="opening-practice-section" style="margin-top:24px;">
+                <div class="opening-practice-title">Pràctica d'obertura (10 moviments)</div>
+                <div class="opening-color-select">
+                    <label>Juga amb:</label>
+                    <select id="opening-practice-color" class="select-control">
+                        <option value="w">Blanques</option>
+                        <option value="b">Negres</option>
+                    </select>
+                </div>
+                <div class="opening-board-container">
+                    <div id="opening-practice-board"></div>
+                </div>
+                <div class="opening-controls">
+                    <div class="opening-status" id="opening-practice-status">Preparat per practicar</div>
+                    <div class="opening-progress" id="opening-practice-progress">Moviment 0/10</div>
+                    <div class="opening-buttons">
+                        <button class="btn btn-hint" id="btn-opening-practice-hint">💡 Pista</button>
+                        <button class="btn btn-brain-hint" id="btn-opening-practice-gemini">
+                            <img src="brain.svg" alt="Cervell">
+                            <span>Màxima</span>
+                        </button>
+                        <button class="btn btn-secondary" id="btn-opening-practice-prev">⏮️</button>
+                        <button class="btn btn-secondary" id="btn-opening-practice-next">⏭️</button>
+                        <button class="btn btn-primary" id="btn-opening-practice-start">▶️ Començar</button>
+                        <button class="btn btn-secondary" id="btn-opening-practice-reset">🔄 Reiniciar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-buttons" style="margin-top:24px;">
+                <button class="btn btn-primary" id="btn-back-opening">Tornar al Menú</button>
             </div>
         </div>
 
