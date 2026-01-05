@@ -20,6 +20,7 @@ let currentGameErrors = [];
 let matchErrorQueue = [];
 let currentMatchError = null;
 let isMatchErrorReviewSession = false;
+let lessonHintCallback = null;
 let reviewAutoCloseTimer = null;
 let reviewOpenDelayTimer = null;
 let gameHistory = [];
@@ -6193,6 +6194,13 @@ function handleEngineMessage(rawMsg) {
             pendingEngineFirstMove = false;
             setTimeout(makeEngineMove, 200);
         }
+        return;
+    }
+
+    if (msg.startsWith('bestmove') && typeof lessonHintCallback === 'function') {
+        const move = msg.split(' ')[1];
+        lessonHintCallback(move);
+        lessonHintCallback = null;
         return;
     }
 

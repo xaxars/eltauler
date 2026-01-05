@@ -10,6 +10,9 @@
 //
 // ============================================================================
 
+let lessonBoard = null;
+let lessonGame = new Chess();
+
 // Estat global per la pràctica d'obertures
 let openingPracticeState = {
     activeMoveNumber: null,      // Número del moviment que s'està practicant
@@ -367,9 +370,11 @@ function updateLessonReviewUI(summary) {
         if (storedReview && storedReview.text) {
             container.show();
             reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).fadeIn();
+            initLessonPracticeBoard();
         } else {
             container.hide();
             reviewBox.hide().empty();
+            $('#lesson-practice-area').hide();
         }
         btn.prop('disabled', true);
         return;
@@ -378,8 +383,10 @@ function updateLessonReviewUI(summary) {
     container.show();
     if (storedReview && storedReview.text) {
         reviewBox.html(renderLessonGeminiReviewHtml(storedReview)).show();
+        initLessonPracticeBoard();
     } else {
         reviewBox.hide().empty();
+        $('#lesson-practice-area').hide();
     }
     btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
 }
@@ -434,12 +441,94 @@ async function generateLessonReview() {
         const reviewData = { text, movesList, generatedAt: new Date().toISOString() };
         saveLessonGeminiReview(reviewData);
         reviewBox.html(renderLessonGeminiReviewHtml(reviewData)).fadeIn();
+        initLessonPracticeBoard();
     } catch (error) {
         console.error('[Lesson Review] Error:', error);
         reviewBox.html('<div style="color:var(--severity-high);">❌ No s\'ha pogut generar la ressenya. Revisa la clau de Gemini.</div>').fadeIn();
     } finally {
         openingLessonReviewPending = false;
         btn.prop('disabled', false).text('⚔️ Ressenya d\'obertures');
+    }
+}
+
+// ========================================================================
+// 2.2. TAULER DE PRÀCTICA LLIURE (10 MOVIMENTS)
+// ========================================================================
+
+function initLessonPracticeBoard() {
+    $('#lesson-practice-area').show();
+    lessonGame = new Chess();
+
+    const config = {
+        draggable: true,
+        position: 'start',
+        onDrop: onDropLesson,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    };
+
+    if (lessonBoard) lessonBoard.destroy();
+    lessonBoard = Chessboard('lessonBoard', config);
+    $(window).resize(lessonBoard.resize);
+
+    $('#btn-lesson-hint').off('click').on('click', getLessonHint);
+    $('#btn-lesson-maxim').off('click').on('click', getLessonMaxim);
+    $('#btn-lesson-reset').off('click').on('click', () => {
+        lessonGame.reset();
+        lessonBoard.start();
+        $('#lesson-maxim-output').empty();
+    });
+}
+
+function onDropLesson(source, target) {
+    const move = lessonGame.move({ from: source, to: target, promotion: 'q' });
+    if (move === null) return 'snapback';
+
+    if (lessonGame.history().length > 20) {
+        alert('Has arribat al límit de 10 moviments per a aquesta pràctica.');
+        lessonGame.undo();
+        return 'snapback';
+    }
+    $('#lesson-maxim-output').empty();
+}
+
+function getLessonHint() {
+    if (!stockfishReady) return;
+    $('#btn-lesson-hint').text('⏳...');
+
+    lessonHintCallback = (move) => {
+        $('#btn-lesson-hint').text('💡 Pista');
+        const from = move.substring(0, 2);
+        const to = move.substring(2, 4);
+        lessonBoard.move(`${from}-${to}`);
+        lessonGame.move({ from, to, promotion: 'q' });
+    };
+
+    stockfish.postMessage(`position fen ${lessonGame.fen()}`);
+    stockfish.postMessage('go depth 15');
+}
+
+async function getLessonMaxim() {
+    const apiKey = getLessonGeminiApiKey();
+    if (!apiKey) return alert('Configura Gemini per veure màximes.');
+
+    $('#lesson-maxim-output').html('<span style="opacity:0.5">Meditant màxima...</span>');
+
+    const prompt = `Ets un mestre d'escacs expert en l'estratègia de "L'Art de la Guerra" de Sun Tzu.
+Donada la posició actual en FEN: ${lessonGame.fen()}
+Genera una màxima breu (màxim 2 línies) inspirada en Sun Tzu que ajudi el jugador a plantejar el següent moviment en aquesta obertura.
+Escriu només la màxima en català.`;
+
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${getLessonGeminiModelId()}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
+        });
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "L'oportunitat es troba en el mig de les dificultats.";
+        $('#lesson-maxim-output').text(`"${text.trim()}"`);
+    } catch (e) {
+        $('#lesson-maxim-output').text('El general que guanya la batalla fa molts càlculs abans de lluitar.');
     }
 }
 
