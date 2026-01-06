@@ -4549,7 +4549,16 @@ function updateTvBoardInteractivity() {
 function updateOpeningBoardInteractivity() {
     if (!openingBundleBoard) return;
     const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
-    openingBundleBoard.draggable = !shouldUseTap;
+    
+    // Comprovar si cal reconstruir
+    const currentlyDraggable = openingBundleBoard.draggable !== false;
+    const needsDraggable = !shouldUseTap;
+    
+    if (currentlyDraggable !== needsDraggable) {
+        rebuildOpeningBoardForControlMode();
+        return;
+    }
+    
     if (shouldUseTap) {
         enableOpeningTapToMove();
     } else {
@@ -5342,13 +5351,22 @@ function renderOpeningStatsScreen() {
 }
 
 function initOpeningBundleBoard() {
-    if (openingBundleBoard) return;
     const boardEl = document.getElementById('opening-board');
     if (!boardEl) return;
+    
     openingPracticeGame = new Chess();
     openingPracticeMoveCount = 0;
+    
+    // Si ja existeix, reconstruir per aplicar el mode correcte
+    if (openingBundleBoard) {
+        rebuildOpeningBoardForControlMode();
+        return;
+    }
+    
+    const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
+    
     openingBundleBoard = Chessboard('opening-board', {
-        draggable: true,
+        draggable: !shouldUseTap,  // ✅ Respecta el mode des de l'inici
         position: 'start',
         onDragStart: (source, piece) => {
             if (!openingPracticeGame || openingPracticeGame.game_over()) return false;
@@ -5367,9 +5385,56 @@ function initOpeningBundleBoard() {
         },
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
+    
     updateOpeningPracticeStatus();
-    updateOpeningBoardInteractivity();
-    if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
+    
+    if (shouldUseTap) {
+        enableOpeningTapToMove();
+    }
+    
+    if (typeof openingBundleBoard.resize === 'function') {
+        setTimeout(() => openingBundleBoard.resize(), 50);
+    }
+}
+
+function rebuildOpeningBoardForControlMode() {
+    if (!openingPracticeGame) return;
+    const fen = openingPracticeGame.fen();
+    const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
+
+    if (openingBundleBoard) openingBundleBoard.destroy();
+    
+    openingBundleBoard = Chessboard('opening-board', {
+        draggable: !shouldUseTap,  // ✅ Respecta el mode
+        position: fen,
+        onDragStart: (source, piece) => {
+            if (!openingPracticeGame || openingPracticeGame.game_over()) return false;
+            if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
+            if (openingPracticeEngineThinking) return false;
+            if (openingPracticeGame.turn() === 'w' && piece.search(/^b/) !== -1) return false;
+            if (openingPracticeGame.turn() === 'b' && piece.search(/^w/) !== -1) return false;
+        },
+        onDrop: (source, target) => {
+            const moved = applyOpeningPracticeMove(source, target);
+            if (!moved) return 'snapback';
+        },
+        onSnapEnd: () => {
+            if (!openingPracticeGame) return;
+            openingBundleBoard.position(openingPracticeGame.fen());
+        },
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    });
+
+    setTimeout(() => {
+        if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
+    }, 0);
+
+    if (shouldUseTap) {
+        disableOpeningTapToMove();
+        enableOpeningTapToMove();
+    } else {
+        disableOpeningTapToMove();
+    }
 }
 
 function updateOpeningPracticeStatus() {
