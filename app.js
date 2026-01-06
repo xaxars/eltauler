@@ -165,6 +165,9 @@ let lastTapEventTs = 0;
 let tvTapSelectedSquare = null;
 let tvTapMoveEnabled = false;
 let tvLastTapEventTs = 0;
+let openingTapSelectedSquare = null;
+let openingTapMoveEnabled = false;
+let openingLastTapEventTs = 0;
 
 let deviceType = 'desktop';
 
@@ -193,10 +196,12 @@ function updateDeviceType() {
     if (detected !== deviceType) {
         applyDeviceType(detected);
         resizeBoardToViewport();
-        updateTvBoardInteractivity();        
+        updateTvBoardInteractivity();
+        updateOpeningBoardInteractivity();
     } else if (!document.body.classList.contains(`device-${detected}`)) {
         applyDeviceType(detected);
         updateTvBoardInteractivity();
+        updateOpeningBoardInteractivity();
     }
 }
 
@@ -592,6 +597,7 @@ function applyControlMode(mode, opts) {
 
     if (o.rebuild) rebuildBoardForControlMode();
     updateTvBoardInteractivity();
+    updateOpeningBoardInteractivity();
 }
 
 // Resize del tauler perquè ocupi el màxim possible
@@ -688,6 +694,11 @@ function clearTvTapSelection() {
     applyEpaperMode(loadEpaperPreference(), { skipSave: true });
 }
 
+function clearOpeningTapSelection() {
+    openingTapSelectedSquare = null;
+    $('#opening-board .square-55d63').removeClass('tap-selected tap-move');
+}
+
 function clearEngineMoveHighlights() {
     $('#myBoard .square-55d63').removeClass('engine-move');
 }
@@ -717,6 +728,18 @@ function highlightTvTapSelection(square) {
     if (!square) return;
     const sel = $(`#tv-board .square-55d63[data-square='${square}']`);
     sel.addClass('tap-selected');
+}
+
+function highlightOpeningTapSelection(square) {
+    $('#opening-board .square-55d63').removeClass('tap-selected tap-move');
+    if (!square || !openingPracticeGame) return;
+    const sel = $(`#opening-board .square-55d63[data-square='${square}']`);
+    sel.addClass('tap-selected');
+
+    const moves = openingPracticeGame.moves({ square: square, verbose: true });
+    for (const mv of moves) {
+        $(`#opening-board .square-55d63[data-square='${mv.to}']`).addClass('tap-move');
+    }
 }
 
 function commitHumanMoveFromTap(from, to) {
@@ -837,6 +860,63 @@ function disableTvTapToMove() {
     const boardEl = document.getElementById('tv-board');
     if (boardEl) boardEl.style.touchAction = '';
     clearTvTapSelection();
+}
+
+function enableOpeningTapToMove() {
+    if (openingTapMoveEnabled) return;
+    openingTapMoveEnabled = true;
+    const boardEl = document.getElementById('opening-board');
+    if (boardEl) boardEl.style.touchAction = 'none';
+
+    $('#opening-board').off('.opening-tapmove')
+        .on(`pointerdown.opening-tapmove touchstart.opening-tapmove`, '.square-55d63', function(e) {
+            if (!openingPracticeGame || openingPracticeGame.game_over()) return;
+            if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return;
+            if (openingPracticeEngineThinking) return;
+
+            if (e && e.preventDefault) e.preventDefault();
+
+            const nowTs = Date.now();
+            if (nowTs - openingLastTapEventTs < 180) return;
+            openingLastTapEventTs = nowTs;
+
+            const square = $(this).attr('data-square');
+            if (!square) return;
+
+            if (!openingTapSelectedSquare) {
+                const p = openingPracticeGame.get(square);
+                if (!p || p.color !== openingPracticeGame.turn()) return;
+                openingTapSelectedSquare = square;
+                highlightOpeningTapSelection(square);
+                return;
+            }
+
+            if (square === openingTapSelectedSquare) {
+                clearOpeningTapSelection();
+                return;
+            }
+
+            const moved = commitOpeningPracticeMoveFromTap(openingTapSelectedSquare, square);
+            if (moved) {
+                clearOpeningTapSelection();
+                return;
+            }
+
+            const p2 = openingPracticeGame.get(square);
+            if (p2 && p2.color === openingPracticeGame.turn()) {
+                openingTapSelectedSquare = square;
+                highlightOpeningTapSelection(square);
+            }
+        });
+}
+
+function disableOpeningTapToMove() {
+    if (!openingTapMoveEnabled) return;
+    openingTapMoveEnabled = false;
+    $('#opening-board').off('.opening-tapmove');
+    const boardEl = document.getElementById('opening-board');
+    if (boardEl) boardEl.style.touchAction = '';
+    clearOpeningTapSelection();
 }
 
 let currentStreak = 0;
@@ -4466,6 +4546,17 @@ function updateTvBoardInteractivity() {
     }
 }
 
+function updateOpeningBoardInteractivity() {
+    if (!openingBundleBoard) return;
+    const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
+    openingBundleBoard.draggable = !shouldUseTap;
+    if (shouldUseTap) {
+        enableOpeningTapToMove();
+    } else {
+        disableOpeningTapToMove();
+    }
+}
+
 function clearTvHintHighlight() {
     $('#tv-board .square-55d63').removeClass('highlight-hint');
 }
@@ -5267,17 +5358,8 @@ function initOpeningBundleBoard() {
             if (openingPracticeGame.turn() === 'b' && piece.search(/^w/) !== -1) return false;
         },
         onDrop: (source, target) => {
-            if (!openingPracticeGame) return 'snapback';
-            if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return 'snapback';
-            const move = openingPracticeGame.move({ from: source, to: target, promotion: 'q' });
-            if (!move) return 'snapback';
-            openingPracticeMoveCount += 1;
-            updateOpeningPracticeStatus();
-            if (openingPracticeMoveCount < OPENING_PRACTICE_MAX_PLIES && !openingPracticeGame.game_over()) {
-                if (openingPracticeGame.turn() === 'b') {
-                    requestOpeningPracticeEngineMove();
-                }
-            }
+            const moved = applyOpeningPracticeMove(source, target);
+            if (!moved) return 'snapback';
         },
         onSnapEnd: () => {
             if (!openingPracticeGame) return;
@@ -5286,6 +5368,7 @@ function initOpeningBundleBoard() {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
     updateOpeningPracticeStatus();
+    updateOpeningBoardInteractivity();
     if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
 }
 
@@ -5317,7 +5400,30 @@ function resetOpeningPracticeBoard() {
         openingBundleBoard.position('start');
         if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
     }
+    clearOpeningTapSelection();
     updateOpeningPracticeStatus();
+}
+
+function applyOpeningPracticeMove(source, target) {
+    if (!openingPracticeGame) return false;
+    if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
+    const move = openingPracticeGame.move({ from: source, to: target, promotion: 'q' });
+    if (!move) return false;
+    openingPracticeMoveCount += 1;
+    updateOpeningPracticeStatus();
+    if (openingPracticeMoveCount < OPENING_PRACTICE_MAX_PLIES && !openingPracticeGame.game_over()) {
+        if (openingPracticeGame.turn() === 'b') {
+            requestOpeningPracticeEngineMove();
+        }
+    }
+    return true;
+}
+
+function commitOpeningPracticeMoveFromTap(source, target) {
+    const moved = applyOpeningPracticeMove(source, target);
+    if (!moved) return false;
+    if (openingBundleBoard) openingBundleBoard.position(openingPracticeGame.fen());
+    return true;
 }
 
 function requestOpeningPracticeEngineMove() {
