@@ -5396,7 +5396,7 @@ function setupEvents() {
         alert('La màxima del tauler bundle s’activarà més endavant.');
     });
     $('#btn-opening-bundle-resign').click(() => {
-        alert('Rendir-se al tauler bundle s’activarà més endavant.');
+        resetOpeningPracticeBoard();
     });
 
     $('#btn-reset-league').click(() => {
