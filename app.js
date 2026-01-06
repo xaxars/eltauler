@@ -43,6 +43,7 @@ let tvJeroglyphicsActualMove = null;
 let tvJeroglyphicsResumePlayback = false;
 let tvJeroglyphicsSolved = false;
 let tvJeroglyphicsIncorrect = false;
+let isAnalyzingOpeningHint = false;
 
 // Sistema d'IA Adaptativa
 let recentGames = []; 
@@ -4549,16 +4550,7 @@ function updateTvBoardInteractivity() {
 function updateOpeningBoardInteractivity() {
     if (!openingBundleBoard) return;
     const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
-    
-    // Comprovar si cal reconstruir
-    const currentlyDraggable = openingBundleBoard.draggable !== false;
-    const needsDraggable = !shouldUseTap;
-    
-    if (currentlyDraggable !== needsDraggable) {
-        rebuildOpeningBoardForControlMode();
-        return;
-    }
-    
+    openingBundleBoard.draggable = !shouldUseTap;
     if (shouldUseTap) {
         enableOpeningTapToMove();
     } else {
@@ -5387,54 +5379,8 @@ function initOpeningBundleBoard() {
     });
     
     updateOpeningPracticeStatus();
-    
-    if (shouldUseTap) {
-        enableOpeningTapToMove();
-    }
-    
-    if (typeof openingBundleBoard.resize === 'function') {
-        setTimeout(() => openingBundleBoard.resize(), 50);
-    }
-}
-
-function rebuildOpeningBoardForControlMode() {
-    if (!openingPracticeGame) return;
-    const fen = openingPracticeGame.fen();
-    const shouldUseTap = deviceType === 'mobile' && controlMode === 'tap' && isTouchDevice();
-
-    if (openingBundleBoard) openingBundleBoard.destroy();
-    
-    openingBundleBoard = Chessboard('opening-board', {
-        draggable: !shouldUseTap,  // ✅ Respecta el mode
-        position: fen,
-        onDragStart: (source, piece) => {
-            if (!openingPracticeGame || openingPracticeGame.game_over()) return false;
-            if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
-            if (openingPracticeEngineThinking) return false;
-            if (openingPracticeGame.turn() === 'w' && piece.search(/^b/) !== -1) return false;
-            if (openingPracticeGame.turn() === 'b' && piece.search(/^w/) !== -1) return false;
-        },
-        onDrop: (source, target) => {
-            const moved = applyOpeningPracticeMove(source, target);
-            if (!moved) return 'snapback';
-        },
-        onSnapEnd: () => {
-            if (!openingPracticeGame) return;
-            openingBundleBoard.position(openingPracticeGame.fen());
-        },
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-    });
-
-    setTimeout(() => {
-        if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
-    }, 0);
-
-    if (shouldUseTap) {
-        disableOpeningTapToMove();
-        enableOpeningTapToMove();
-    } else {
-        disableOpeningTapToMove();
-    }
+    updateOpeningBoardInteractivity();
+    if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
 }
 
 function updateOpeningPracticeStatus() {
@@ -5466,12 +5412,31 @@ function resetOpeningPracticeBoard() {
         if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
     }
     clearOpeningTapSelection();
+    clearOpeningPracticeHintHighlight();
     updateOpeningPracticeStatus();
+    if (openingPracticeMoveCount < OPENING_PRACTICE_MAX_PLIES && !openingPracticeGame.game_over()) {
+        if (openingPracticeGame.turn() === 'b') {
+            requestOpeningPracticeEngineMove();
+        }
+    }
+    return true;
+}
+
+function commitOpeningPracticeMoveFromTap(source, target) {
+    const moved = applyOpeningPracticeMove(source, target);
+    if (!moved) return false;
+    if (openingBundleBoard) openingBundleBoard.position(openingPracticeGame.fen());
+    return true;
+}
+
+function clearOpeningPracticeHintHighlight() {
+    $('#opening-board').find('.highlight-hint').removeClass('highlight-hint');
 }
 
 function applyOpeningPracticeMove(source, target) {
     if (!openingPracticeGame) return false;
     if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
+    clearOpeningPracticeHintHighlight();
     const move = openingPracticeGame.move({ from: source, to: target, promotion: 'q' });
     if (!move) return false;
     openingPracticeMoveCount += 1;
@@ -5561,10 +5526,19 @@ function setupEvents() {
         $('#start-screen').show();
     });
     $('#btn-opening-bundle-hint').click(() => {
-        alert('La pista del tauler bundle s’activarà més endavant.');
+        if (!stockfish && !ensureStockfish()) {
+            alert("Motor Stockfish no disponible");
+            return;
+        }
+        if (!openingPracticeGame || openingPracticeGame.game_over()) return;
+        isAnalyzingOpeningHint = true;
+        const noteEl = document.getElementById('opening-practice-note');
+        if (noteEl) noteEl.textContent = 'Buscant millor moviment...';
+        stockfish.postMessage(`position fen ${openingPracticeGame.fen()}`);
+        stockfish.postMessage('go depth 15');
     });
     $('#btn-opening-bundle-maxim').click(() => {
-        alert('La màxima del tauler bundle s’activarà més endavant.');
+        void requestGeminiBundleHint();
     });
     $('#btn-opening-bundle-resign').click(() => {
         resetOpeningPracticeBoard();
@@ -6458,6 +6432,7 @@ function handleEngineMessage(rawMsg) {
                     if (openingBundleBoard) {
                         openingBundleBoard.position(openingPracticeGame.fen());
                     }
+                    clearOpeningPracticeHintHighlight();
                     updateOpeningPracticeStatus();
                 }
                 openingPracticeEngineThinking = false;
@@ -6573,6 +6548,26 @@ function handleEngineMessage(rawMsg) {
 
             cacheBundleAnswer(lastPosition, bundleAcceptMode, null, { ...bundlePvMoves }, null, { ...bundlePvLines });
             evaluateBundleAttempt({ mode: bundleAcceptMode, bestMove: null, pvMoves: { ...bundlePvMoves }, pvLines: { ...bundlePvLines } });
+        }
+        return;
+    }
+
+    if (isAnalyzingOpeningHint && msg.indexOf('bestmove') !== -1) {
+        isAnalyzingOpeningHint = false;
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])/);
+        if (match && openingBundleBoard) {
+            const from = match[1];
+            const to = match[2];
+            // Netejar highlights anteriors
+            clearOpeningPracticeHintHighlight();
+            // Destacar caselles d'origen i destí
+            $('#opening-board').find('.square-' + from).addClass('highlight-hint');
+            $('#opening-board').find('.square-' + to).addClass('highlight-hint');
+            const noteEl = document.getElementById('opening-practice-note');
+            if (noteEl) noteEl.textContent = `Pista: ${from} → ${to}`;
+        } else {
+            const noteEl = document.getElementById('opening-practice-note');
+            if (noteEl) noteEl.textContent = 'No s\'ha pogut obtenir la pista.';
         }
         return;
     }
