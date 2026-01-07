@@ -4487,6 +4487,12 @@ async function requestOpeningMaximLlull() {
             maxim = maxim.slice(0, 249).trim() + '…';
         }
 
+        // Verificar que no s'hagi cancel·lat (p.ex. per undo)
+        if (!openingMaximPending) {
+            console.log('[Gemini SunTzu] Petició cancel·lada (probablement per undo)');
+            return;
+        }
+
         // Estil inspirat en l'Art de la Guerra - vermell fosc oriental
         let html = '<div style="padding:14px; background:rgba(139,0,0,0.12); border-left:3px solid #8b0000; border-radius:8px; line-height:1.6;">';
         html += '<div style="font-weight:600; color:#c9a227; margin-bottom:10px; font-family:\'Cinzel\', serif;">⚔️ L\'Art de la Guerra:</div>';
@@ -4499,7 +4505,8 @@ async function requestOpeningMaximLlull() {
 
     } catch (err) {
         console.error('[Gemini SunTzu]', err);
-        if (noteEl) {
+        // Només mostrar error si no s'ha cancel·lat
+        if (openingMaximPending && noteEl) {
             noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut consultar Sun Tzu. Torna-ho a provar.</div>';
         }
     } finally {
@@ -5710,6 +5717,8 @@ function initOpeningBundleBoard() {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
     updateOpeningPracticeStatus();
+    updateOpeningPrecisionDisplay();
+    updateOpeningUndoButton();
     if (typeof openingBundleBoard.resize === 'function') openingBundleBoard.resize();
 
     // Aplicar mode de control tàctil
@@ -5774,14 +5783,20 @@ function undoOpeningPracticeMove() {
     openingPracticeGoodMoves = lastState.goodMoves;
     openingPracticeTotalMoves = lastState.totalMoves;
 
-    // Cancel·lar qualsevol anàlisi pendent
+    // Cancel·lar qualsevol anàlisi de precisió pendent
     openingPracticeAnalysisPending = false;
     openingPracticePendingAnalysis = null;
     openingPracticeLastFen = null;
     openingPracticeLastMove = null;
+
+    // Cancel·lar pista pendent
+    openingPracticeHintPending = false;
     openingPracticeBestMove = null;
 
-    // Netejar seleccions i pistes
+    // Cancel·lar màxima pendent (evitar que s'actualitzi després de l'undo)
+    openingMaximPending = false;
+
+    // Netejar seleccions i pistes visuals
     clearOpeningTapSelection();
     clearOpeningHintHighlight();
 
