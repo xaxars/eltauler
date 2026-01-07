@@ -5738,15 +5738,16 @@ function updateOpeningPracticeStatus() {
     noteEl.textContent = `Moviments restants: ${remainingFullMoves} per bàndol (vs Stockfish màxim).`;
 }
 
-// Guardar estat per undo
+// Guardar estat per undo (només un moviment)
 function saveOpeningPracticeState() {
     if (!openingPracticeGame) return;
-    openingPracticeHistory.push({
+    // Només guardem l'últim estat (limitat a un sol undo)
+    openingPracticeHistory = [{
         fen: openingPracticeGame.fen(),
         moveCount: openingPracticeMoveCount,
         goodMoves: openingPracticeGoodMoves,
         totalMoves: openingPracticeTotalMoves
-    });
+    }];
     updateOpeningUndoButton();
 }
 
@@ -5759,12 +5760,12 @@ function updateOpeningUndoButton() {
     btn.disabled = !canUndo;
 }
 
-// Desfer l'últim moviment (o els dos últims si l'engine ha respost)
+// Desfer el darrer moviment de l'usuari (limitat a un sol undo)
 function undoOpeningPracticeMove() {
     if (!openingPracticeGame || openingPracticeHistory.length === 0) return;
     if (openingPracticeEngineThinking) return;
 
-    // Recuperar l'últim estat
+    // Recuperar i esborrar l'estat guardat (només permet un undo)
     const lastState = openingPracticeHistory.pop();
 
     // Restaurar l'estat del joc
