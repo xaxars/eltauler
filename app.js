@@ -38,6 +38,7 @@ let openingPracticeAnalysisPending = false;
 let openingPracticeLastFen = null;
 let openingPracticeLastMove = null;
 let openingPracticePendingAnalysis = null; // Guardar anàlisi pendent mentre l'engine pensa
+let openingPracticeHistory = []; // Historial de moviments per undo
 let gameHistory = [];
 let historyBoard = null;
 let historyReplay = null;
@@ -992,13 +993,20 @@ function commitOpeningMoveFromTap(from, to) {
     if (openingPracticeGame.game_over()) return false;
     if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return false;
 
+    // Guardar estat per poder desfer
+    saveOpeningPracticeState();
+
     // Guardar FEN abans del moviment per a l'anàlisi de precisió
     const fenBefore = openingPracticeGame.fen();
     const movePlayed = from + to;
     const wasWhiteTurn = openingPracticeGame.turn() === 'w';
 
     const move = openingPracticeGame.move({ from: from, to: to, promotion: 'q' });
-    if (!move) return false;
+    if (!move) {
+        // Moviment invàlid, treure l'estat guardat
+        openingPracticeHistory.pop();
+        return false;
+    }
 
     // Netejar pista visual i estat
     clearOpeningHintHighlight();
@@ -5654,13 +5662,21 @@ function initOpeningBundleBoard() {
         onDrop: (source, target) => {
             if (!openingPracticeGame) return 'snapback';
             if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return 'snapback';
+
+            // Guardar estat per poder desfer
+            saveOpeningPracticeState();
+
             // Guardar FEN abans del moviment per a l'anàlisi de precisió
             const fenBefore = openingPracticeGame.fen();
             const movePlayed = source + target;
             const wasWhiteTurn = openingPracticeGame.turn() === 'w';
 
             const move = openingPracticeGame.move({ from: source, to: target, promotion: 'q' });
-            if (!move) return 'snapback';
+            if (!move) {
+                // Moviment invàlid, treure l'estat guardat
+                openingPracticeHistory.pop();
+                return 'snapback';
+            }
             // Netejar pista visual i estat
             clearOpeningHintHighlight();
             openingPracticeBestMove = null;
@@ -5722,6 +5738,69 @@ function updateOpeningPracticeStatus() {
     noteEl.textContent = `Moviments restants: ${remainingFullMoves} per bàndol (vs Stockfish màxim).`;
 }
 
+// Guardar estat per undo
+function saveOpeningPracticeState() {
+    if (!openingPracticeGame) return;
+    openingPracticeHistory.push({
+        fen: openingPracticeGame.fen(),
+        moveCount: openingPracticeMoveCount,
+        goodMoves: openingPracticeGoodMoves,
+        totalMoves: openingPracticeTotalMoves
+    });
+    updateOpeningUndoButton();
+}
+
+// Actualitzar estat del botó undo
+function updateOpeningUndoButton() {
+    const btn = document.getElementById('btn-opening-undo');
+    if (!btn) return;
+    // Deshabilitar si no hi ha historial o l'engine està pensant
+    const canUndo = openingPracticeHistory.length > 0 && !openingPracticeEngineThinking;
+    btn.disabled = !canUndo;
+}
+
+// Desfer l'últim moviment (o els dos últims si l'engine ha respost)
+function undoOpeningPracticeMove() {
+    if (!openingPracticeGame || openingPracticeHistory.length === 0) return;
+    if (openingPracticeEngineThinking) return;
+
+    // Recuperar l'últim estat
+    const lastState = openingPracticeHistory.pop();
+
+    // Restaurar l'estat del joc
+    openingPracticeGame.load(lastState.fen);
+    openingPracticeMoveCount = lastState.moveCount;
+    openingPracticeGoodMoves = lastState.goodMoves;
+    openingPracticeTotalMoves = lastState.totalMoves;
+
+    // Cancel·lar qualsevol anàlisi pendent
+    openingPracticeAnalysisPending = false;
+    openingPracticePendingAnalysis = null;
+    openingPracticeLastFen = null;
+    openingPracticeLastMove = null;
+    openingPracticeBestMove = null;
+
+    // Netejar seleccions i pistes
+    clearOpeningTapSelection();
+    clearOpeningHintHighlight();
+
+    // Actualitzar el tauler
+    if (openingBundleBoard) {
+        openingBundleBoard.position(openingPracticeGame.fen());
+    }
+
+    // Actualitzar UI
+    updateOpeningPracticeStatus();
+    updateOpeningPrecisionDisplay();
+    updateOpeningUndoButton();
+
+    // Missatge
+    const noteEl = document.getElementById('opening-practice-note');
+    if (noteEl) {
+        noteEl.textContent = 'Moviment desfet. Torna a intentar-ho!';
+    }
+}
+
 function resetOpeningPracticeBoard() {
     openingPracticeGame = new Chess();
     openingPracticeMoveCount = 0;
@@ -5737,6 +5816,7 @@ function resetOpeningPracticeBoard() {
     openingPracticeLastFen = null;
     openingPracticeLastMove = null;
     openingPracticePendingAnalysis = null;
+    openingPracticeHistory = []; // Reset historial per undo
     clearOpeningTapSelection();
     clearOpeningHintHighlight();
     if (openingBundleBoard) {
@@ -5745,6 +5825,7 @@ function resetOpeningPracticeBoard() {
     }
     updateOpeningPracticeStatus();
     updateOpeningPrecisionDisplay();
+    updateOpeningUndoButton();
 }
 
 function requestOpeningPracticeEngineMove() {
@@ -5752,6 +5833,7 @@ function requestOpeningPracticeEngineMove() {
     if (openingPracticeMoveCount >= OPENING_PRACTICE_MAX_PLIES) return;
     if (!stockfish && !ensureStockfish()) return;
     openingPracticeEngineThinking = true;
+    updateOpeningUndoButton(); // Deshabilitar undo mentre l'engine pensa
     try { stockfish.postMessage('setoption name UCI_LimitStrength value false'); } catch (e) {}
     try { stockfish.postMessage('setoption name Skill Level value 20'); } catch (e) {}
     try { stockfish.postMessage('setoption name MultiPV value 1'); } catch (e) {}
@@ -5859,6 +5941,9 @@ function setupEvents() {
     });
     $('#btn-opening-bundle-resign').click(() => {
         resetOpeningPracticeBoard();
+    });
+    $('#btn-opening-undo').click(() => {
+        undoOpeningPracticeMove();
     });
 
     $('#btn-reset-league').click(() => {
@@ -6808,6 +6893,7 @@ function handleEngineMessage(rawMsg) {
                     updateOpeningPracticeStatus();
                 }
                 openingPracticeEngineThinking = false;
+                updateOpeningUndoButton(); // Rehabilitar undo
 
                 // Executar anàlisi de precisió pendent si n'hi ha
                 if (openingPracticePendingAnalysis) {
@@ -6820,6 +6906,7 @@ function handleEngineMessage(rawMsg) {
             }, 2000);
         } else {
             openingPracticeEngineThinking = false;
+            updateOpeningUndoButton(); // Rehabilitar undo
             // Executar anàlisi de precisió pendent si n'hi ha
             if (openingPracticePendingAnalysis) {
                 const pending = openingPracticePendingAnalysis;
