@@ -886,7 +886,11 @@ function updateOpeningPrecisionDisplay() {
     }
 
     const precision = Math.round((openingPracticeGoodMoves / openingPracticeTotalMoves) * 100);
-    precisionEl.text(precision + '%');
+    if (precision === 0) {
+        precisionEl.text(`${openingPracticeGoodMoves}/${openingPracticeTotalMoves}`);
+    } else {
+        precisionEl.text(precision + '%');
+    }
     barEl.css('width', precision + '%');
     barEl.removeClass('good warning danger');
     if (precision >= 75) barEl.addClass('good');
