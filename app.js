@@ -5776,6 +5776,7 @@ function updateOpeningUndoButton() {
 function updateOpeningOkButton() {
     const btn = document.getElementById('btn-opening-ok');
     if (!btn) return;
+    btn.style.display = 'flex';
     const canOk = openingPracticeAwaitingOk && !openingPracticeEngineThinking;
     btn.disabled = !canOk;
 }
