@@ -940,23 +940,18 @@ function processOpeningMoveAnalysis(bestMove) {
 
     // Sempre incrementar total i actualitzar display, fins i tot si hi ha errors
     try {
-        if (!openingPracticeLastMove || !bestMove) {
-            // Si falten dades, comptem com a moviment fet però no analitzat
-            openingPracticeTotalMoves++;
-            updateOpeningPrecisionDisplay();
-            return;
-        }
+        if (openingPracticeLastMove && bestMove) {
+            // Comparar el moviment jugat amb el millor moviment
+            const played = openingPracticeLastMove.toLowerCase();
+            const best = bestMove.toLowerCase();
 
-        // Comparar el moviment jugat amb el millor moviment
-        const played = openingPracticeLastMove.toLowerCase();
-        const best = bestMove.toLowerCase();
+            // Considerar correcte si coincideix exactament o si la casella destí és la mateixa
+            const playedTo = played.substring(2, 4);
+            const bestTo = best.substring(2, 4);
 
-        // Considerar correcte si coincideix exactament o si la casella destí és la mateixa
-        const playedTo = played.substring(2, 4);
-        const bestTo = best.substring(2, 4);
-
-        if (played === best || playedTo === bestTo) {
-            openingPracticeGoodMoves++;
+            if (played === best || playedTo === bestTo) {
+                openingPracticeGoodMoves++;
+            }
         }
         openingPracticeTotalMoves++;
         updateOpeningPrecisionDisplay();
