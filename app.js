@@ -71,6 +71,7 @@ let openingErrorCurrentFen = null; // FEN actual que s'està practicant
 let openingErrorBestMove = null; // Millor moviment esperat
 let openingErrorColorFilter = null; // 'w' o 'b'
 let openingErrorMoveFilter = null; // Número de moviment
+let openingErrorMovesRemaining = 2; // Jugades restants per completar
 
 let gameHistory = [];
 let historyBoard = null;
@@ -6420,32 +6421,24 @@ function buildOpeningMoveStats() {
                 // Si la precisió és inferior al 75%, guardar l'error
                 if (precision < 75) {
                     countBelow75 += 1;
-                    console.log('Error trobat:', { moveNumber, color: color.key, precision, matchFen: match.fen, matchBestMove: match.bestMove, entryErrors: entry.errors?.length });
                     // Primer intentar obtenir del moveReview
                     if (match.fen && match.bestMove) {
-                        console.log('Afegint des de moveReview');
                         errorPositions.push({
                             fen: match.fen,
                             bestMove: match.bestMove,
                             quality: match.quality
                         });
                     } else if (Array.isArray(entry.errors)) {
-                        console.log('Buscant en entry.errors...', entry.errors);
                         // Fallback: buscar en entry.errors pel número de moviment
                         for (const err of entry.errors) {
-                            if (!err.fen || !err.bestMove) {
-                                console.log('Error sense fen/bestMove:', err);
-                                continue;
-                            }
+                            if (!err.fen || !err.bestMove) continue;
                             // Extreure moveNum i color del FEN
                             const fenParts = err.fen.split(' ');
                             if (fenParts.length < 6) continue;
                             const fenColor = fenParts[1]; // 'w' o 'b'
                             const fenMoveNum = parseInt(fenParts[5], 10);
-                            console.log('Comparant:', { fenColor, fenMoveNum, targetColor: color.key, targetMove: moveNumber });
                             // El FEN mostra qui ha de moure, que és qui va fer l'error
                             if (fenColor === color.key && fenMoveNum === moveNumber) {
-                                console.log('MATCH! Afegint error position');
                                 errorPositions.push({
                                     fen: err.fen,
                                     bestMove: err.bestMove,
@@ -6479,20 +6472,12 @@ function buildOpeningMoveStats() {
 let openingStatsData = [];
 
 function renderOpeningStatsScreen() {
-    console.log('[OpeningStats] renderOpeningStatsScreen called');
     const listEl = $('#opening-stats-list');
     const noteEl = $('#opening-stats-note');
-    if (!listEl.length) {
-        console.log('[OpeningStats] listEl not found!');
-        return;
-    }
+    if (!listEl.length) return;
 
     const { stats, totalEntries } = buildOpeningMoveStats();
     openingStatsData = stats; // Guardar per accedir després
-
-    const errorsFound = stats.filter(s => s.countBelow75 > 0);
-    console.log('[OpeningStats] Stats amb errors:', errorsFound);
-    console.log('[OpeningStats] ErrorPositions:', errorsFound.map(e => ({ move: e.moveNumber, color: e.colorKey, positions: e.errorPositions.length })));
 
     // Separar per color
     const whiteStats = stats.filter(s => s.colorKey === 'w');
@@ -6541,18 +6526,12 @@ function renderOpeningStatsScreen() {
 
     listEl.html(html);
 
-    // Verificar que els move-link s'han creat
-    const moveLinks = listEl.find('.move-link');
-    console.log('[OpeningStats] Move links trobats:', moveLinks.length);
-
     // Afegir handlers de clic amb event delegation
     listEl.off('click', '.move-link').on('click', '.move-link', function(e) {
-        console.log('[OpeningStats] CLICK detectat!');
         e.preventDefault();
         e.stopPropagation();
         const color = $(this).attr('data-color');
         const moveNum = parseInt($(this).attr('data-move'), 10);
-        console.log('[OpeningStats] color:', color, 'moveNum:', moveNum);
         startOpeningErrorPractice(color, moveNum);
     });
 
@@ -6563,23 +6542,19 @@ function renderOpeningStatsScreen() {
 
 // Inicia la pràctica d'un error d'obertura
 function startOpeningErrorPractice(color, moveNum) {
-    console.log('[OpeningStats] startOpeningErrorPractice:', color, moveNum);
     // Buscar les posicions d'error per aquest color i moviment
     const stat = openingStatsData.find(s => s.colorKey === color && s.moveNumber === moveNum);
-    console.log('[OpeningStats] stat trobat:', stat);
-    console.log('[OpeningStats] errorPositions:', stat?.errorPositions);
 
     if (!stat || !stat.errorPositions || stat.errorPositions.length === 0) {
-        console.log('[OpeningStats] No hi ha posicions!');
         alert('No hi ha posicions disponibles per practicar.\n\nLes partides antigues no tenen aquesta informació. Juga noves partides per poder practicar els errors.');
         return;
     }
 
-    console.log('[OpeningStats] Iniciant pràctica amb', stat.errorPositions.length, 'posicions');
     openingErrorPracticeActive = true;
     openingErrorCurrentPositions = [...stat.errorPositions];
     openingErrorColorFilter = color;
     openingErrorMoveFilter = moveNum;
+    openingErrorMovesRemaining = 2; // Dues jugades per resoldre
 
     // Seleccionar un error aleatori
     loadRandomOpeningError();
@@ -6598,6 +6573,7 @@ function loadRandomOpeningError() {
     openingErrorCurrentFen = error.fen;
     openingErrorBestMove = error.bestMove;
     openingPracticeBestMove = error.bestMove; // Per a la pista
+    openingErrorMovesRemaining = 2; // Reset a 2 jugades
 
     // Inicialitzar el tauler d'obertures amb la posició
     if (!openingBundleBoard) {
@@ -6619,10 +6595,16 @@ function loadRandomOpeningError() {
     $('.opening-section').first().hide();
     $('.opening-section').last().show();
 
+    // Scroll al tauler
+    const boardEl = document.getElementById('opening-board');
+    if (boardEl) {
+        boardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     // Actualitzar nota
     const noteEl = document.getElementById('opening-practice-note');
     if (noteEl) {
-        noteEl.innerHTML = `<div style="padding:8px; background:rgba(201,162,39,0.15); border-radius:8px;">Practica l'error del moviment ${openingErrorMoveFilter} (${openingErrorColorFilter === 'w' ? 'blanques' : 'negres'})</div>`;
+        noteEl.innerHTML = `<div style="padding:8px; background:rgba(201,162,39,0.15); border-radius:8px;">Practica l'error del moviment ${openingErrorMoveFilter} (${openingErrorColorFilter === 'w' ? 'blanques' : 'negres'}) - 2 jugades</div>`;
     }
 
     updateOpeningPrecisionDisplay();
@@ -6630,6 +6612,15 @@ function loadRandomOpeningError() {
 }
 
 function handleOpeningErrorSuccess() {
+    openingErrorMovesRemaining -= 1;
+
+    // Si queden jugades, fer que l'oponent respongui
+    if (openingErrorMovesRemaining > 0) {
+        // Demanar moviment de Stockfish per l'oponent
+        requestOpeningErrorOpponentMove();
+        return;
+    }
+
     // Treure la posició resolta de la llista
     openingErrorCurrentPositions = openingErrorCurrentPositions.filter(
         p => p.fen !== openingErrorCurrentFen
@@ -6639,6 +6630,55 @@ function handleOpeningErrorSuccess() {
     openingErrorBestMove = null;
 
     showOpeningErrorSuccessOverlay(false);
+}
+
+function requestOpeningErrorOpponentMove() {
+    if (!openingPracticeGame || openingPracticeGame.game_over()) {
+        // Si la partida ha acabat, completar
+        openingErrorMovesRemaining = 0;
+        handleOpeningErrorSuccess();
+        return;
+    }
+
+    // Utilitzar Stockfish per obtenir el millor moviment de l'oponent
+    if (!stockfish && !ensureStockfish()) {
+        // Si no hi ha Stockfish, fer moviment aleatori
+        const moves = openingPracticeGame.moves();
+        if (moves.length > 0) {
+            const randomMove = moves[Math.floor(Math.random() * moves.length)];
+            openingPracticeGame.move(randomMove);
+            openingBundleBoard.position(openingPracticeGame.fen());
+            // Obtenir el nou millor moviment per l'usuari
+            requestOpeningErrorBestMoveForUser();
+        }
+        return;
+    }
+
+    openingPracticeEngineThinking = true;
+    stockfishRequestor = 'opening-error-opponent';
+    try {
+        stockfish.postMessage('stop');
+        stockfish.postMessage('ucinewgame');
+        stockfish.postMessage('position fen ' + openingPracticeGame.fen());
+        stockfish.postMessage('go depth 10');
+    } catch (e) {
+        openingPracticeEngineThinking = false;
+    }
+}
+
+function requestOpeningErrorBestMoveForUser() {
+    if (!stockfish && !ensureStockfish()) {
+        openingErrorBestMove = null;
+        openingPracticeBestMove = null;
+        return;
+    }
+
+    stockfishRequestor = 'opening-error-bestmove';
+    try {
+        stockfish.postMessage('stop');
+        stockfish.postMessage('position fen ' + openingPracticeGame.fen());
+        stockfish.postMessage('go depth 12');
+    } catch (e) {}
 }
 
 function showOpeningErrorSuccessOverlay(noMore) {
@@ -8083,6 +8123,38 @@ function handleEngineMessage(rawMsg) {
             updateOpeningUndoButton(); // Rehabilitar undo
             // Pre-calcular el millor moviment per al proper torn de l'usuari
             preCalculateOpeningBestMove();
+        }
+        return;
+    }
+
+    // Handler per moviment de l'oponent en pràctica d'errors d'obertura
+    if (openingErrorPracticeActive && stockfishRequestor === 'opening-error-opponent' && msg.indexOf('bestmove') !== -1) {
+        stockfishRequestor = null;
+        openingPracticeEngineThinking = false;
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
+        if (match && openingPracticeGame) {
+            const from = match[1];
+            const to = match[2];
+            const promotion = match[3] || 'q';
+            const move = openingPracticeGame.move({ from, to, promotion });
+            if (move) {
+                setTimeout(() => {
+                    openingBundleBoard.position(openingPracticeGame.fen());
+                    // Obtenir el millor moviment per l'usuari
+                    requestOpeningErrorBestMoveForUser();
+                }, 300);
+            }
+        }
+        return;
+    }
+
+    // Handler per obtenir millor moviment de l'usuari en pràctica d'errors
+    if (openingErrorPracticeActive && stockfishRequestor === 'opening-error-bestmove' && msg.indexOf('bestmove') !== -1) {
+        stockfishRequestor = null;
+        const match = msg.match(/bestmove\s([a-h][1-8])([a-h][1-8])([qrbn])?/);
+        if (match) {
+            openingErrorBestMove = match[1] + match[2] + (match[3] || '');
+            openingPracticeBestMove = openingErrorBestMove;
         }
         return;
     }
