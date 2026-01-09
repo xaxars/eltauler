@@ -6420,13 +6420,32 @@ function buildOpeningMoveStats() {
                 // Si la precisió és inferior al 75%, guardar l'error
                 if (precision < 75) {
                     countBelow75 += 1;
-                    // Obtenir fen i bestMove directament del moveReview
+                    // Primer intentar obtenir del moveReview
                     if (match.fen && match.bestMove) {
                         errorPositions.push({
                             fen: match.fen,
                             bestMove: match.bestMove,
                             quality: match.quality
                         });
+                    } else if (Array.isArray(entry.errors)) {
+                        // Fallback: buscar en entry.errors pel número de moviment
+                        for (const err of entry.errors) {
+                            if (!err.fen || !err.bestMove) continue;
+                            // Extreure moveNum i color del FEN
+                            const fenParts = err.fen.split(' ');
+                            if (fenParts.length < 6) continue;
+                            const fenColor = fenParts[1]; // 'w' o 'b'
+                            const fenMoveNum = parseInt(fenParts[5], 10);
+                            // El FEN mostra qui ha de moure, que és qui va fer l'error
+                            if (fenColor === color.key && fenMoveNum === moveNumber) {
+                                errorPositions.push({
+                                    fen: err.fen,
+                                    bestMove: err.bestMove,
+                                    quality: match.quality
+                                });
+                                break; // Només un error per partida/moviment
+                            }
+                        }
                     }
                 }
             });
@@ -6458,7 +6477,6 @@ function renderOpeningStatsScreen() {
 
     const { stats, totalEntries } = buildOpeningMoveStats();
     openingStatsData = stats; // Guardar per accedir després
-    console.log('Opening stats:', stats.filter(s => s.countBelow75 > 0));
 
     // Separar per color
     const whiteStats = stats.filter(s => s.colorKey === 'w');
@@ -6513,7 +6531,6 @@ function renderOpeningStatsScreen() {
         e.stopPropagation();
         const color = $(this).attr('data-color');
         const moveNum = parseInt($(this).attr('data-move'), 10);
-        console.log('Click move-link:', color, moveNum);
         startOpeningErrorPractice(color, moveNum);
     });
 
