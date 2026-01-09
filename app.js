@@ -6420,24 +6420,32 @@ function buildOpeningMoveStats() {
                 // Si la precisió és inferior al 75%, guardar l'error
                 if (precision < 75) {
                     countBelow75 += 1;
+                    console.log('Error trobat:', { moveNumber, color: color.key, precision, matchFen: match.fen, matchBestMove: match.bestMove, entryErrors: entry.errors?.length });
                     // Primer intentar obtenir del moveReview
                     if (match.fen && match.bestMove) {
+                        console.log('Afegint des de moveReview');
                         errorPositions.push({
                             fen: match.fen,
                             bestMove: match.bestMove,
                             quality: match.quality
                         });
                     } else if (Array.isArray(entry.errors)) {
+                        console.log('Buscant en entry.errors...', entry.errors);
                         // Fallback: buscar en entry.errors pel número de moviment
                         for (const err of entry.errors) {
-                            if (!err.fen || !err.bestMove) continue;
+                            if (!err.fen || !err.bestMove) {
+                                console.log('Error sense fen/bestMove:', err);
+                                continue;
+                            }
                             // Extreure moveNum i color del FEN
                             const fenParts = err.fen.split(' ');
                             if (fenParts.length < 6) continue;
                             const fenColor = fenParts[1]; // 'w' o 'b'
                             const fenMoveNum = parseInt(fenParts[5], 10);
+                            console.log('Comparant:', { fenColor, fenMoveNum, targetColor: color.key, targetMove: moveNumber });
                             // El FEN mostra qui ha de moure, que és qui va fer l'error
                             if (fenColor === color.key && fenMoveNum === moveNumber) {
+                                console.log('MATCH! Afegint error position');
                                 errorPositions.push({
                                     fen: err.fen,
                                     bestMove: err.bestMove,
