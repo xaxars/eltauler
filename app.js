@@ -6352,7 +6352,9 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
             moveNumber: review.moveNumber,
             quality: review.quality,
             color: review.color,
-            swing: review.swing || 0
+            swing: review.swing || 0,
+            fen: review.fen || null,
+            bestMove: review.bestMove || null
         })),
         review: [], // ← BUIDAT: ja no cal guardar review completa
         severeErrors: Array.isArray(options.severeErrors) ? options.severeErrors : [],
@@ -6418,17 +6420,13 @@ function buildOpeningMoveStats() {
                 // Si la precisió és inferior al 75%, guardar l'error
                 if (precision < 75) {
                     countBelow75 += 1;
-                    // Buscar l'error corresponent a entry.errors
-                    if (Array.isArray(entry.errors)) {
-                        const errorMatch = entry.errors.find(err => err.fen);
-                        if (errorMatch) {
-                            errorPositions.push({
-                                fen: errorMatch.fen,
-                                bestMove: errorMatch.bestMove,
-                                playerMove: errorMatch.playerMove,
-                                severity: errorMatch.severity
-                            });
-                        }
+                    // Obtenir fen i bestMove directament del moveReview
+                    if (match.fen && match.bestMove) {
+                        errorPositions.push({
+                            fen: match.fen,
+                            bestMove: match.bestMove,
+                            quality: match.quality
+                        });
                     }
                 }
             });
