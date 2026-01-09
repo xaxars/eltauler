@@ -5036,50 +5036,106 @@ Màxima específica`;
     }
 }
 
-function buildOpeningTechnicalPrompt(openingInfo, nextMove, moveCount, fen) {
-    const openingName = openingInfo ? openingInfo.name : null;
-    const eco = openingInfo ? openingInfo.eco : null;
-    const movesPlayed = openingInfo ? openingInfo.movesPlayed : [];
+// Obté les continuacions possibles agrupades per moviment
+function getOpeningContinuations(sequence) {
+    if (!openingTrie) return { continuations: {}, total: 0 };
 
-    let openingContext = '';
-    if (openingName) {
-        openingContext = `OBERTURA DETECTADA: ${eco ? `[${eco}] ` : ''}${openingName}
-MOVIMENTS JUGATS: ${movesPlayed.join(' ')}
-SEGÜENT MOVIMENT TEÒRIC: ${nextMove || 'Fora de teoria'}`;
-    } else {
-        openingContext = `POSICIÓ: Fora de les obertures principals
-MOVIMENTS JUGATS: ${movesPlayed.join(' ') || 'Cap'}
-FEN: ${fen}`;
+    let node = openingTrie;
+
+    // Si no hi ha seqüència, comencem des de l'arrel
+    if (sequence.length > 0) {
+        for (const move of sequence) {
+            if (!node.children[move]) {
+                return { continuations: {}, total: 0 };
+            }
+            node = node.children[move];
+        }
     }
 
-    return `Ets un mestre d'escacs i estrateg militar inspirat en Sun Tzu.
+    // Agrupar obertures per següent moviment
+    const continuations = {};
+    let total = 0;
 
-${openingContext}
-MOVIMENT NÚMERO: ${moveCount} de 20 (màxim)
+    for (const [nextMove, childNode] of Object.entries(node.children)) {
+        // Recollir obertures d'aquest camí
+        const openings = [];
+        function collect(n) {
+            openings.push(...n.openings);
+            for (const child of Object.values(n.children)) {
+                collect(child);
+            }
+        }
+        collect(childNode);
 
-TASCA:
-Respon en EXACTAMENT 2-3 frases curtes en català:
+        if (openings.length > 0) {
+            // Ordenar per longitud de moviments (més curtes primer = més generals)
+            openings.sort((a, b) => a.moves.length - b.moves.length);
+            continuations[nextMove] = openings.slice(0, 3); // Màxim 3 per moviment
+            total += openings.length;
+        }
+    }
 
-1. PRIMERA FRASE: Explica breument què és aquesta obertura i el seu objectiu estratègic principal.
-${openingName ? `(Basa't en el nom "${openingName}")` : '(Descriu la posició actual i les seves característiques)'}
+    return { continuations, total };
+}
 
-2. SEGONA/TERCERA FRASE: Dona una pista sobre el següent moviment (${nextMove || 'millor jugada'}) usant metàfores de "L'Art de la Guerra" de Sun Tzu.
-- NO diguis el moviment directament
-- Usa llenguatge estratègic militar
-- Exemples de metàfores: "el centre és el territori a conquerir", "els flancs són els camins secrets", "el cavall és l'explorador àgil"
+function buildOpeningEncouragementPrompt() {
+    return `Ets Sun Tzu, mestre estrateg, donant consell abans d'una partida d'escacs.
+
+TASCA: Escriu UNA SOLA frase d'encoratjament en català, estil "L'Art de la Guerra".
 
 REGLES:
-- Màxim 3 frases curtes i directes
+- Exactament 1 frase (màxim 120 caràcters)
+- To filosòfic i inspirador
+- Sobre preparació, estratègia o inici de batalla
 - Sense emojis
-- Sense numeració
-- Sense salutacions ni introduccions
-- Escriu directament el contingut
+- Sense cometes
 - En català
 
-EXEMPLE DE FORMAT (NO COPIAR):
-"La Defensa Siciliana busca contraatacar el centre blanc des del flanc. Sun Tzu deia: 'Ataca on l'enemic no espera' - considera les diagonals obertes com a camins de penetració."
+EXEMPLES D'ESTIL (NO COPIAR):
+"Qui coneix el terreny abans de la batalla ja ha guanyat la meitat."
+"El primer moviment revela la intenció; escull-lo amb saviesa."
 
-Respon ara:`
+Escriu la frase:`
+}
+
+function buildOpeningAlternativesPrompt(sequence, continuations, selectedOpening) {
+    const movesStr = sequence.join(' ');
+
+    // Preparar llista d'alternatives
+    let alternativesText = '';
+    const moves = Object.keys(continuations);
+
+    for (const move of moves.slice(0, 4)) { // Màxim 4 alternatives
+        const openings = continuations[move];
+        const names = openings.map(o => o.name).slice(0, 2).join(', ');
+        alternativesText += `- ${move}: ${names}\n`;
+    }
+
+    const currentOpeningInfo = selectedOpening
+        ? `OBERTURA ACTUAL: [${selectedOpening.eco || '??'}] ${selectedOpening.name}`
+        : 'POSICIÓ: Sense obertura específica detectada';
+
+    return `Ets Sun Tzu aplicant "L'Art de la Guerra" als escacs.
+
+SEQÜÈNCIA JUGADA: ${movesStr || '(inici)'}
+${currentOpeningInfo}
+
+CONTINUACIONS POSSIBLES:
+${alternativesText || 'Cap continuació teòrica'}
+
+TASCA: En 2-3 frases curtes en català:
+1. Descriu breument l'obertura actual o la posició
+2. Presenta les alternatives de continuació amb metàfores militars de Sun Tzu
+   - NO diguis els moviments directament (${moves.slice(0, 3).join(', ')})
+   - Usa al·lusions: "el camí del centre", "el flanc de rei", "la diagonal oculta"
+
+REGLES:
+- Màxim 3 frases
+- Sense emojis ni numeració
+- To estratègic militar
+- En català
+
+Respon:`
 }
 
 async function requestOpeningMaximLlull() {
@@ -5096,26 +5152,29 @@ async function requestOpeningMaximLlull() {
     openingMaximPending = true;
     const noteEl = document.getElementById('opening-practice-note');
 
+    // Determinar si és inici o continuació
+    const isStart = openingCurrentSequence.length === 0;
+
     if (noteEl) {
-        noteEl.innerHTML = '<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">Analitzant obertura...</div>';
+        noteEl.innerHTML = isStart
+            ? '<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">Consultant Sun Tzu...</div>'
+            : '<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">Analitzant alternatives...</div>';
     }
 
-    const fen = openingPracticeGame.fen();
-    const moveCount = openingPracticeMoveCount;
+    // Construir prompt segons l'estat
+    let prompt;
+    let continuationsData = null;
 
-    // Preparar informació de l'obertura
-    const openingInfo = openingSelectedOpening ? {
-        name: openingSelectedOpening.name,
-        eco: openingSelectedOpening.eco,
-        movesPlayed: openingCurrentSequence
-    } : {
-        name: null,
-        eco: null,
-        movesPlayed: openingCurrentSequence
-    };
-
-    const nextMove = openingNextMoveHint;
-    const prompt = buildOpeningTechnicalPrompt(openingInfo, nextMove, moveCount, fen);
+    if (isStart) {
+        prompt = buildOpeningEncouragementPrompt();
+    } else {
+        continuationsData = getOpeningContinuations(openingCurrentSequence);
+        prompt = buildOpeningAlternativesPrompt(
+            openingCurrentSequence,
+            continuationsData.continuations,
+            openingSelectedOpening
+        );
+    }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
 
@@ -5126,8 +5185,8 @@ async function requestOpeningMaximLlull() {
             body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 600,
+                    temperature: isStart ? 0.9 : 0.7,
+                    maxOutputTokens: isStart ? 200 : 600,
                     topP: 0.9,
                     topK: 30
                 }
@@ -5149,6 +5208,7 @@ async function requestOpeningMaximLlull() {
             .replace(/^\d+\.\s*/gm, '') // Treure numeracions
             .replace(/^[-•]\s*/gm, '') // Treure bullets
             .replace(/\*\*/g, '') // Treure bold markdown
+            .replace(/^["«]|["»]$/g, '') // Treure cometes
             .trim();
 
         // Verificar que no s'hagi cancel·lat (p.ex. per undo)
@@ -5157,15 +5217,28 @@ async function requestOpeningMaximLlull() {
             return;
         }
 
-        // Construir HTML amb estil oriental
+        // Construir HTML segons tipus
         let html = '<div style="padding:12px; background:rgba(139,0,0,0.10); border-left:3px solid #8b0000; border-radius:8px; line-height:1.6;">';
 
-        // Mostrar nom de l'obertura si existeix
-        if (openingSelectedOpening) {
-            html += `<div style="font-weight:600; color:#c9a227; margin-bottom:8px; font-size:0.9em;">${openingSelectedOpening.eco ? `[${openingSelectedOpening.eco}] ` : ''}${openingSelectedOpening.name}</div>`;
+        if (isStart) {
+            // Frase d'encoratjament simple
+            html += `<div style="font-style:italic; color:var(--text-primary); font-size:1em;">"${cleanText}"</div>`;
+            html += '<div style="text-align:right; margin-top:6px; font-size:0.8em; color:var(--text-secondary);">— Sun Tzu</div>';
+        } else {
+            // Mostrar obertura actual si existeix
+            if (openingSelectedOpening) {
+                html += `<div style="font-weight:600; color:#c9a227; margin-bottom:8px; font-size:0.9em;">[${openingSelectedOpening.eco || '??'}] ${openingSelectedOpening.name}</div>`;
+            }
+
+            // Mostrar alternatives disponibles
+            if (continuationsData && Object.keys(continuationsData.continuations).length > 0) {
+                const numAlternatives = Object.keys(continuationsData.continuations).length;
+                html += `<div style="font-size:0.8em; color:var(--text-secondary); margin-bottom:6px;">${numAlternatives} continuacions possibles (${continuationsData.total} obertures)</div>`;
+            }
+
+            html += `<div style="color:var(--text-primary); font-size:0.95em;">${cleanText}</div>`;
         }
 
-        html += `<div style="color:var(--text-primary); font-size:0.95em;">${cleanText}</div>`;
         html += '</div>';
 
         lastOpeningMaxim = html;
@@ -5175,7 +5248,7 @@ async function requestOpeningMaximLlull() {
         console.error('[Gemini Opening]', err);
         // Només mostrar error si no s'ha cancel·lat
         if (openingMaximPending && noteEl) {
-            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">No s\'ha pogut analitzar l\'obertura. Torna-ho a provar.</div>';
+            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">No s\'ha pogut consultar. Torna-ho a provar.</div>';
         }
     } finally {
         openingMaximPending = false;
