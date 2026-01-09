@@ -6319,7 +6319,8 @@ function recordGameHistory(resultLabel, finalPrecision, counts, options = {}) {
         moveReviews: currentReview.map(review => ({
             moveNumber: review.moveNumber,
             quality: review.quality,
-            color: review.color
+            color: review.color,
+            swing: review.swing || 0
         })),
         review: [], // ← BUIDAT: ja no cal guardar review completa
         severeErrors: Array.isArray(options.severeErrors) ? options.severeErrors : [],
@@ -6337,6 +6338,24 @@ function isOpeningMoveCorrect(quality) {
     return quality === 'excel' || quality === 'good';
 }
 
+// Converteix qualitat a precisió aproximada (0-100)
+function qualityToPrecision(quality, swing) {
+    // Si tenim swing, calcular precisió basada en centipawns perduts
+    // Swing 0 = 100%, Swing 100 = ~50%, Swing 200+ = ~0%
+    if (typeof swing === 'number' && swing > 0) {
+        return Math.max(0, Math.round(100 - (swing / 2)));
+    }
+    // Fallback basat en qualitat
+    switch (quality) {
+        case 'excel': return 100;
+        case 'good': return 85;
+        case 'inaccuracy': return 60;
+        case 'mistake': return 35;
+        case 'blunder': return 10;
+        default: return 50;
+    }
+}
+
 function buildOpeningMoveStats() {
     const recentEntries = gameHistory
         .slice(-10)
@@ -6350,20 +6369,39 @@ function buildOpeningMoveStats() {
     colors.forEach(color => {
         for (let moveNumber = 1; moveNumber <= 10; moveNumber++) {
             let total = 0;
-            let correct = 0;
+            let totalPrecision = 0;
+            let countBelow75 = 0;
+            let sumErrorBelow75 = 0;
+
             recentEntries.forEach(entry => {
                 const match = entry.moveReviews.find(review => (
                     review.moveNumber === moveNumber && review.color === color.key
                 ));
                 if (!match) return;
+
                 total += 1;
-                if (isOpeningMoveCorrect(match.quality)) correct += 1;
+                const precision = qualityToPrecision(match.quality, match.swing);
+                totalPrecision += precision;
+
+                // Si la precisió és inferior al 75%, comptar i sumar error
+                if (precision < 75) {
+                    countBelow75 += 1;
+                    // Error = 100 - precisió (percentatge d'error)
+                    sumErrorBelow75 += (100 - precision);
+                }
             });
+
+            const avgPrecision = total > 0 ? Math.round(totalPrecision / total) : null;
+            const avgErrorBelow75 = countBelow75 > 0 ? Math.round(sumErrorBelow75 / countBelow75) : null;
+
             stats.push({
                 moveNumber,
                 color: color.label,
+                colorKey: color.key,
                 total,
-                correct
+                avgPrecision,
+                countBelow75,
+                avgErrorBelow75
             });
         }
     });
@@ -6383,27 +6421,49 @@ function renderOpeningStatsScreen() {
         return;
     }
 
+    // Separar per color
+    const whiteStats = stats.filter(s => s.colorKey === 'w');
+    const blackStats = stats.filter(s => s.colorKey === 'b');
+
     let html = `
-        <div class="opening-stats-header">
-            <span>Moviment</span>
-            <span>Mitja correcció</span>
-            <span>Moviments &lt;75%</span>
+        <div class="opening-stats-header" style="font-weight:600; margin-bottom:8px;">
+            <span>Mov.</span>
+            <span>Precisió</span>
+            <span>% Error</span>
+            <span>Partides &lt;75%</span>
         </div>
+        <div style="font-weight:600; color:var(--text-secondary); margin:10px 0 5px; font-size:0.85em;">♔ Blanques</div>
     `;
-    stats.forEach(item => {
-        const percent = item.total ? Math.round((item.correct / item.total) * 100) : null;
-        const below = item.total ? item.total - item.correct : null;
+
+    whiteStats.forEach(item => {
+        const precisionClass = item.avgPrecision !== null && item.avgPrecision < 75 ? 'color:var(--severity-med)' : '';
         html += `
             <div class="opening-stats-row">
-                <div><strong>${item.moveNumber}</strong> · ${item.color}</div>
-                <div>${percent === null ? '—' : `${percent}%`}</div>
-                <div>${below === null ? '—' : below}</div>
+                <div><strong>${item.moveNumber}</strong></div>
+                <div style="${precisionClass}">${item.avgPrecision === null ? '—' : `${item.avgPrecision}%`}</div>
+                <div>${item.avgErrorBelow75 === null ? '—' : `${item.avgErrorBelow75}%`}</div>
+                <div>${item.countBelow75 === 0 ? '—' : item.countBelow75}</div>
             </div>
         `;
     });
+
+    html += `<div style="font-weight:600; color:var(--text-secondary); margin:15px 0 5px; font-size:0.85em;">♚ Negres</div>`;
+
+    blackStats.forEach(item => {
+        const precisionClass = item.avgPrecision !== null && item.avgPrecision < 75 ? 'color:var(--severity-med)' : '';
+        html += `
+            <div class="opening-stats-row">
+                <div><strong>${item.moveNumber}</strong></div>
+                <div style="${precisionClass}">${item.avgPrecision === null ? '—' : `${item.avgPrecision}%`}</div>
+                <div>${item.avgErrorBelow75 === null ? '—' : `${item.avgErrorBelow75}%`}</div>
+                <div>${item.countBelow75 === 0 ? '—' : item.countBelow75}</div>
+            </div>
+        `;
+    });
+
     listEl.html(html);
     if (noteEl.length) {
-        noteEl.text(`Basat en ${totalEntries} partides guardades.`);
+        noteEl.text(`Basat en les últimes ${totalEntries} partides.`);
     }
 }
 

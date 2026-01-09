@@ -599,24 +599,25 @@
         }
         .opening-stats-header {
             display: grid;
-            grid-template-columns: 1.1fr 1fr 1fr;
-            font-size: 0.75rem;
+            grid-template-columns: 0.6fr 1fr 1fr 1fr;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.5px;
             color: var(--text-secondary);
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 6px;
+            padding: 0 10px;
         }
         .opening-stats-row {
             display: grid;
-            grid-template-columns: 1.1fr 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: 0.6fr 1fr 1fr 1fr;
+            gap: 8px;
             align-items: center;
-            padding: 8px 10px;
-            border-radius: 10px;
+            padding: 6px 10px;
+            border-radius: 8px;
             background: rgba(0,0,0,0.2);
             border: 1px solid rgba(201, 162, 39, 0.12);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         body.epaper-mode .opening-stats-row {
             background: #efefef;
@@ -2282,8 +2283,8 @@
                 <h1>Obertures</h1>
             </div>
             <div class="opening-section">
-                <div class="opening-section-title">Moviments 1-10 (darreres 10 partides)</div>
-                <div class="opening-section-desc">Mitja de correcció i moviments per sota del 75%.</div>
+                <div class="opening-section-title">Estadístiques d'obertura (últimes 10 partides)</div>
+                <div class="opening-section-desc">Precisió mitjana per moviment i percentatge d'error en imprecisions (&lt;75%).</div>
                 <div class="opening-stats" id="opening-stats-list"></div>
                 <div class="opening-stats-note" id="opening-stats-note">—</div>
             </div>
