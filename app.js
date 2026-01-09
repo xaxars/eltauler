@@ -2045,7 +2045,7 @@ function openLeague() {
         return;
     }
     createNewLeague(false);
-    $('#start-screen').hide(); $('#stats-screen').hide(); $('#game-screen').hide();
+    $('#start-screen').hide(); $('#stats-screen').hide(); $('#game-screen').removeClass('active').hide();
     $('#league-screen').show();
     renderLeague();
 }
@@ -4316,7 +4316,7 @@ function renderCalibrationResults() {
 
 function showCalibrationResultsScreen() {
     renderCalibrationResults();
-    $('#game-screen').hide();
+    $('#game-screen').removeClass('active').hide();
     $('#league-screen').hide();
     $('#stats-screen').hide();
     $('#history-screen').hide();
@@ -7099,7 +7099,7 @@ function setupEvents() {
             handleGameOver(true);
             return;
         }
-        $('#game-screen').hide();
+        $('#game-screen').removeClass('active').hide();
         $('#start-screen').show();
         if (stockfish) stockfish.postMessage('stop');
     });
@@ -7313,12 +7313,12 @@ async function startGame(isBundle, fen = null) {  // ← AFEGIR async
     $('#bundle-category-success-overlay').hide(); 
     if (!isBundle) isRandomBundleSession = false;
     
-    $('#start-screen').hide(); 
-    $('#stats-screen').hide(); 
-    $('#league-screen').hide(); 
+    $('#start-screen').hide();
+    $('#stats-screen').hide();
+    $('#league-screen').hide();
     $('#history-screen').hide();
     $('#calibration-result-screen').hide();
-    $('#game-screen').show();
+    $('#game-screen').addClass('active').show();
     
 blunderMode = isBundle; 
     isCalibrationGame = isCalibrationActive() && !isBundle;
@@ -8305,7 +8305,7 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
         }
         checkmateOverlay.hide();
         modal.hide();
-        $('#start-screen').hide(); $('#league-screen').hide(); $('#game-screen').hide(); $('#stats-screen').show();
+        $('#start-screen').hide(); $('#league-screen').hide(); $('#game-screen').removeClass('active').hide(); $('#stats-screen').show();
         updateStatsDisplay();
         if (typeof onClose === 'function') onClose();
     });
@@ -8326,7 +8326,7 @@ function showPostGameReview(msg, finalPrecision, counts, onClose, options = {}) 
 }
 
 function returnToMainMenuImmediate() {
-    $('#game-screen').hide(); $('#league-screen').hide(); $('#stats-screen').hide(); $('#calibration-result-screen').hide(); $('#start-screen').show();
+    $('#game-screen').removeClass('active').hide(); $('#league-screen').hide(); $('#stats-screen').hide(); $('#calibration-result-screen').hide(); $('#start-screen').show();
     if (stockfish) stockfish.postMessage('stop');
     clearTapSelection();
     isMatchErrorReviewSession = false;
@@ -8640,7 +8640,7 @@ function handleGameOver(manualResign = false) {
     };
     
     let onClose = () => {
-        if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').hide(); $('#league-screen').show(); renderLeague(); }
+        if (wasLeagueMatch) { currentGameMode = 'free'; currentOpponent = null; $('#game-screen').removeClass('active').hide(); $('#league-screen').show(); renderLeague(); }
     };
     if (calibrationJustCompleted) {
         const baseClose = onClose;
