@@ -6458,6 +6458,7 @@ function renderOpeningStatsScreen() {
 
     const { stats, totalEntries } = buildOpeningMoveStats();
     openingStatsData = stats; // Guardar per accedir després
+    console.log('Opening stats:', stats.filter(s => s.countBelow75 > 0));
 
     // Separar per color
     const whiteStats = stats.filter(s => s.colorKey === 'w');
@@ -6506,10 +6507,13 @@ function renderOpeningStatsScreen() {
 
     listEl.html(html);
 
-    // Afegir handlers de clic
-    listEl.find('.move-link').off('click').on('click', function() {
-        const color = $(this).data('color');
-        const moveNum = $(this).data('move');
+    // Afegir handlers de clic amb event delegation
+    listEl.off('click', '.move-link').on('click', '.move-link', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const color = $(this).attr('data-color');
+        const moveNum = parseInt($(this).attr('data-move'), 10);
+        console.log('Click move-link:', color, moveNum);
         startOpeningErrorPractice(color, moveNum);
     });
 
