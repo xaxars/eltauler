@@ -256,7 +256,7 @@ let bundleAcceptMode = 'top1'; // 'top1' o 'top2'
 const bundleAnswerCache = new Map();
 
 const GEMINI_API_KEY_STORAGE = 'chess_gemini_api_key';
-const GEMINI_MODEL_ID = 'gemini-3-pro-preview';
+const GEMINI_MODEL_ID = 'gemini-3-flash-preview';
 let geminiApiKey = null;
 
 const EPAPER_MODE_KEY = 'eltauler_epaper_mode';
