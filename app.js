@@ -72,6 +72,7 @@ let openingErrorBestMove = null; // Millor moviment esperat
 let openingErrorColorFilter = null; // 'w' o 'b'
 let openingErrorMoveFilter = null; // Número de moviment
 let openingErrorMovesRemaining = 2; // Jugades restants per completar
+let openingErrorCurrentIndex = -1; // Índex de la posició actual
 
 let gameHistory = [];
 let historyBoard = null;
@@ -6570,6 +6571,7 @@ function loadRandomOpeningError() {
     const idx = Math.floor(Math.random() * openingErrorCurrentPositions.length);
     const error = openingErrorCurrentPositions[idx];
 
+    openingErrorCurrentIndex = idx; // Guardar índex per eliminar després
     openingErrorCurrentFen = error.fen;
     openingErrorBestMove = error.bestMove;
     openingPracticeBestMove = error.bestMove; // Per a la pista
@@ -6621,13 +6623,14 @@ function handleOpeningErrorSuccess() {
         return;
     }
 
-    // Treure la posició resolta de la llista
-    openingErrorCurrentPositions = openingErrorCurrentPositions.filter(
-        p => p.fen !== openingErrorCurrentFen
-    );
+    // Treure la posició resolta de la llista per índex
+    if (openingErrorCurrentIndex >= 0 && openingErrorCurrentIndex < openingErrorCurrentPositions.length) {
+        openingErrorCurrentPositions.splice(openingErrorCurrentIndex, 1);
+    }
 
     openingErrorCurrentFen = null;
     openingErrorBestMove = null;
+    openingErrorCurrentIndex = -1;
 
     showOpeningErrorSuccessOverlay(false);
 }
