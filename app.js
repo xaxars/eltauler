@@ -6553,6 +6553,7 @@ function startOpeningErrorPractice(color, moveNum) {
 
     openingErrorPracticeActive = true;
     openingErrorCurrentPositions = [...stat.errorPositions];
+    console.log('[ErrorPractice] START - posicions totals:', openingErrorCurrentPositions.length);
     openingErrorColorFilter = color;
     openingErrorMoveFilter = moveNum;
     openingErrorMovesRemaining = 2; // Dues jugades per resoldre
@@ -6624,9 +6625,11 @@ function handleOpeningErrorSuccess() {
     }
 
     // Treure la posició resolta de la llista per índex
+    console.log('[ErrorPractice] handleSuccess - abans splice:', openingErrorCurrentPositions.length, 'index:', openingErrorCurrentIndex);
     if (openingErrorCurrentIndex >= 0 && openingErrorCurrentIndex < openingErrorCurrentPositions.length) {
         openingErrorCurrentPositions.splice(openingErrorCurrentIndex, 1);
     }
+    console.log('[ErrorPractice] handleSuccess - després splice:', openingErrorCurrentPositions.length);
 
     openingErrorCurrentFen = null;
     openingErrorBestMove = null;
@@ -6692,6 +6695,9 @@ function showOpeningErrorSuccessOverlay(noMore) {
     }
 
     const remaining = openingErrorCurrentPositions.length;
+    console.log('[ErrorPractice] showOverlay - remaining:', remaining, 'noMore:', noMore);
+    console.log('[ErrorPractice] positions:', openingErrorCurrentPositions);
+
     $('#opening-error-remaining').text(
         noMore ? 'Has resolt tots els errors!' :
         remaining > 0 ? `${remaining} error${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''}` :
@@ -6706,10 +6712,13 @@ function showOpeningErrorSuccessOverlay(noMore) {
     });
 
     $('#btn-opening-error-again').off('click').on('click', () => {
+        console.log('[ErrorPractice] btn-again clicked, positions:', openingErrorCurrentPositions.length);
         overlay.hide();
         if (openingErrorCurrentPositions.length > 0) {
+            console.log('[ErrorPractice] Loading another random error');
             loadRandomOpeningError();
         } else {
+            console.log('[ErrorPractice] No more positions, exiting');
             exitOpeningErrorPractice();
         }
     });
