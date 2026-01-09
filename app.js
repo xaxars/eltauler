@@ -5036,48 +5036,50 @@ Màxima específica`;
     }
 }
 
-function buildOpeningMaximPromptSunTzu(fen, moveCount) {
-    const phase = moveCount <= 4 ? 'inicial' : moveCount <= 8 ? 'desenvolupament' : 'transició';
+function buildOpeningTechnicalPrompt(openingInfo, nextMove, moveCount, fen) {
+    const openingName = openingInfo ? openingInfo.name : null;
+    const eco = openingInfo ? openingInfo.eco : null;
+    const movesPlayed = openingInfo ? openingInfo.movesPlayed : [];
 
-    return `Ets Sun Tzu, autor de "L'Art de la Guerra", aplicant la teva saviesa militar als escacs.
+    let openingContext = '';
+    if (openingName) {
+        openingContext = `OBERTURA DETECTADA: ${eco ? `[${eco}] ` : ''}${openingName}
+MOVIMENTS JUGATS: ${movesPlayed.join(' ')}
+SEGÜENT MOVIMENT TEÒRIC: ${nextMove || 'Fora de teoria'}`;
+    } else {
+        openingContext = `POSICIÓ: Fora de les obertures principals
+MOVIMENTS JUGATS: ${movesPlayed.join(' ') || 'Cap'}
+FEN: ${fen}`;
+    }
 
-POSICIÓ ACTUAL (FEN): ${fen}
-FASE DE L'OBERTURA: ${phase} (moviment ${moveCount} de 10)
+    return `Ets un mestre d'escacs i estrateg militar inspirat en Sun Tzu.
 
-INSTRUCCIONS:
-Genera exactament 1 màxima d'escacs inspirada en "L'Art de la Guerra":
-- Usa llenguatge concís, profund i sentenciós com Sun Tzu
-- La màxima ha de ser un consell estratègic aplicable a l'obertura d'escacs
-- Ha de reflectir la filosofia de Sun Tzu: preparació, engany, coneixement de l'enemic, economia de forces
-- Escriu en català modern però amb to filosòfic oriental
+${openingContext}
+MOVIMENT NÚMERO: ${moveCount} de 20 (màxim)
 
-TEMES A CONSIDERAR SEGONS LA FASE:
-${phase === 'inicial' ? `
-- "Coneix-te a tu mateix i coneix el teu enemic" - control del centre
-- "La victòria suprem és sotmetre l'enemic sense lluitar" - posicionament
-- "En la guerra, el camí és evitar el que és fort i atacar el que és feble" - desenvolupament` : ''}
-${phase === 'desenvolupament' ? `
-- "Tot l'art de la guerra es basa en l'engany" - maniobres tàctiques
-- "Qui arriba primer al camp de batalla i espera l'enemic està fresc" - iniciativa
-- "Mantingues els teus amics a prop i els teus enemics més a prop" - coordinació` : ''}
-${phase === 'transició' ? `
-- "L'oportunitat de derrotar l'enemic la proporciona el propi enemic" - esperar errors
-- "Un exèrcit victoriós guanya primer i després cerca la batalla" - preparació
-- "La velocitat és l'essència de la guerra" - activitat de les peces` : ''}
+TASCA:
+Respon en EXACTAMENT 2-3 frases curtes en català:
 
-REGLES IMPERATIVES:
-- Exactament 1 màxima entre 60-200 caràcters
-- Estil filosòfic i sentenciós de Sun Tzu
-- NO revelar jugades concretes
-- NO usar emojis ni enumeracions
-- Escriu NOMÉS la màxima, res més
+1. PRIMERA FRASE: Explica breument què és aquesta obertura i el seu objectiu estratègic principal.
+${openingName ? `(Basa't en el nom "${openingName}")` : '(Descriu la posició actual i les seves característiques)'}
 
-EXEMPLES D'ESTIL (NO COPIAR, només per referència):
-"El general savi conquista el centre abans que l'enemic pensi en disputar-lo."
-"Com l'aigua s'adapta al terreny, les peces han de fluir cap a les caselles buides."
-"Qui domina les columnes obertes domina els camins de la victòria."
+2. SEGONA/TERCERA FRASE: Dona una pista sobre el següent moviment (${nextMove || 'millor jugada'}) usant metàfores de "L'Art de la Guerra" de Sun Tzu.
+- NO diguis el moviment directament
+- Usa llenguatge estratègic militar
+- Exemples de metàfores: "el centre és el territori a conquerir", "els flancs són els camins secrets", "el cavall és l'explorador àgil"
 
-Genera ara 1 màxima:`
+REGLES:
+- Màxim 3 frases curtes i directes
+- Sense emojis
+- Sense numeració
+- Sense salutacions ni introduccions
+- Escriu directament el contingut
+- En català
+
+EXEMPLE DE FORMAT (NO COPIAR):
+"La Defensa Siciliana busca contraatacar el centre blanc des del flanc. Sun Tzu deia: 'Ataca on l'enemic no espera' - considera les diagonals obertes com a camins de penetració."
+
+Respon ara:`
 }
 
 async function requestOpeningMaximLlull() {
@@ -5085,7 +5087,7 @@ async function requestOpeningMaximLlull() {
     if (!geminiApiKey) {
         const noteEl = document.getElementById('opening-practice-note');
         if (noteEl) {
-            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px; line-height:1.5;">⚠️ Configura la clau de Gemini a Estadístiques → Configuració per utilitzar aquesta funció.</div>';
+            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px; line-height:1.5;">Configura la clau de Gemini a Estadístiques per utilitzar aquesta funció.</div>';
         }
         return;
     }
@@ -5095,12 +5097,25 @@ async function requestOpeningMaximLlull() {
     const noteEl = document.getElementById('opening-practice-note');
 
     if (noteEl) {
-        noteEl.innerHTML = '<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">⚔️ Sun Tzu medita sobre la posició...</div>';
+        noteEl.innerHTML = '<div style="padding:8px; background:rgba(100,100,255,0.15); border-radius:8px;">Analitzant obertura...</div>';
     }
 
     const fen = openingPracticeGame.fen();
     const moveCount = openingPracticeMoveCount;
-    const prompt = buildOpeningMaximPromptSunTzu(fen, moveCount);
+
+    // Preparar informació de l'obertura
+    const openingInfo = openingSelectedOpening ? {
+        name: openingSelectedOpening.name,
+        eco: openingSelectedOpening.eco,
+        movesPlayed: openingCurrentSequence
+    } : {
+        name: null,
+        eco: null,
+        movesPlayed: openingCurrentSequence
+    };
+
+    const nextMove = openingNextMoveHint;
+    const prompt = buildOpeningTechnicalPrompt(openingInfo, nextMove, moveCount, fen);
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${encodeURIComponent(geminiApiKey)}`;
 
@@ -5111,8 +5126,8 @@ async function requestOpeningMaximLlull() {
             body: JSON.stringify({
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.85,
-                    maxOutputTokens: 500,
+                    temperature: 0.7,
+                    maxOutputTokens: 600,
                     topP: 0.9,
                     topK: 30
                 }
@@ -5121,7 +5136,7 @@ async function requestOpeningMaximLlull() {
 
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error('[Gemini SunTzu] Error response:', response.status, errorBody);
+            console.error('[Gemini Opening] Error response:', response.status, errorBody);
             throw new Error(`Gemini error ${response.status}: ${errorBody}`);
         }
 
@@ -5129,40 +5144,38 @@ async function requestOpeningMaximLlull() {
         const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
         if (!text) throw new Error('Resposta buida de Gemini');
 
-        // Agafa només la primera línia vàlida (una sola màxima)
-        const lines = text.split('\n').filter(l => l.trim() && l.trim().length >= 30);
-
-        if (lines.length === 0) {
-            throw new Error('Resposta massa curta');
-        }
-
-        // Neteja i limita la màxima
-        let maxim = lines[0].trim().replace(/^["«]|["»]$/g, '');
-        if (maxim.length > 250) {
-            maxim = maxim.slice(0, 249).trim() + '…';
-        }
+        // Netejar el text de possibles artefactes
+        let cleanText = text
+            .replace(/^\d+\.\s*/gm, '') // Treure numeracions
+            .replace(/^[-•]\s*/gm, '') // Treure bullets
+            .replace(/\*\*/g, '') // Treure bold markdown
+            .trim();
 
         // Verificar que no s'hagi cancel·lat (p.ex. per undo)
         if (!openingMaximPending) {
-            console.log('[Gemini SunTzu] Petició cancel·lada (probablement per undo)');
+            console.log('[Gemini Opening] Petició cancel·lada (probablement per undo)');
             return;
         }
 
-        // Estil inspirat en l'Art de la Guerra - vermell fosc oriental
-        let html = '<div style="padding:14px; background:rgba(139,0,0,0.12); border-left:3px solid #8b0000; border-radius:8px; line-height:1.6;">';
-        html += '<div style="font-weight:600; color:#c9a227; margin-bottom:10px; font-family:\'Cinzel\', serif;">⚔️ L\'Art de la Guerra:</div>';
-        html += `<div style="font-style:italic; color:var(--text-primary); font-size:1.05em;">"${maxim}"</div>`;
-        html += '<div style="text-align:right; margin-top:8px; font-size:0.85em; color:var(--text-secondary);">— Sun Tzu</div>';
+        // Construir HTML amb estil oriental
+        let html = '<div style="padding:12px; background:rgba(139,0,0,0.10); border-left:3px solid #8b0000; border-radius:8px; line-height:1.6;">';
+
+        // Mostrar nom de l'obertura si existeix
+        if (openingSelectedOpening) {
+            html += `<div style="font-weight:600; color:#c9a227; margin-bottom:8px; font-size:0.9em;">${openingSelectedOpening.eco ? `[${openingSelectedOpening.eco}] ` : ''}${openingSelectedOpening.name}</div>`;
+        }
+
+        html += `<div style="color:var(--text-primary); font-size:0.95em;">${cleanText}</div>`;
         html += '</div>';
 
         lastOpeningMaxim = html;
         if (noteEl) noteEl.innerHTML = html;
 
     } catch (err) {
-        console.error('[Gemini SunTzu]', err);
+        console.error('[Gemini Opening]', err);
         // Només mostrar error si no s'ha cancel·lat
         if (openingMaximPending && noteEl) {
-            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">❌ No s\'ha pogut consultar Sun Tzu. Torna-ho a provar.</div>';
+            noteEl.innerHTML = '<div style="padding:10px; background:rgba(255,100,100,0.2); border-radius:8px;">No s\'ha pogut analitzar l\'obertura. Torna-ho a provar.</div>';
         }
     } finally {
         openingMaximPending = false;
@@ -6384,7 +6397,7 @@ function updateOpeningPracticeStatus() {
     if (!noteEl) return;
     const remaining = Math.max(OPENING_PRACTICE_MAX_PLIES - openingPracticeMoveCount, 0);
     if (!openingPracticeGame) {
-        noteEl.textContent = 'Preparat per practicar amb Stockfish.';
+        noteEl.textContent = '—';
         return;
     }
     if (openingPracticeGame.game_over()) {
@@ -6392,11 +6405,11 @@ function updateOpeningPracticeStatus() {
         return;
     }
     if (remaining === 0) {
-        noteEl.textContent = 'Límit assolit: 10 moviments per bàndol.';
+        noteEl.textContent = 'Límit de 10 moviments assolit.';
         return;
     }
-    const remainingFullMoves = Math.ceil(remaining / 2);
-    noteEl.textContent = `Moviments restants: ${remainingFullMoves} per bàndol (vs Stockfish màxim).`;
+    // No mostrar res per defecte - l'usuari pot prémer el botó Gemini per informació
+    noteEl.textContent = '—';
 }
 
 // Guardar estat per undo (només un moviment)
