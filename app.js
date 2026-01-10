@@ -6472,6 +6472,21 @@ function buildOpeningMoveStats() {
 // Variable global per guardar estadístiques d'obertura
 let openingStatsData = [];
 
+function collectAllOpeningErrorPositions() {
+    const positions = [];
+    openingStatsData.forEach(stat => {
+        if (!Array.isArray(stat.errorPositions)) return;
+        stat.errorPositions.forEach(position => {
+            positions.push({
+                ...position,
+                colorKey: stat.colorKey,
+                moveNumber: stat.moveNumber
+            });
+        });
+    });
+    return positions;
+}
+
 function renderOpeningStatsScreen(useExistingData = false) {
     const listEl = $('#opening-stats-list');
     const noteEl = $('#opening-stats-note');
@@ -6508,7 +6523,7 @@ function renderOpeningStatsScreen(useExistingData = false) {
         const hasErrors = item.countBelow75 > 0;
         const errorDisplay = hasErrors
             ? `<span class="move-link" data-color="w" data-move="${item.moveNumber}">${item.countBelow75}</span>`
-            : '—';
+            : item.total > 0 ? '<span class="move-link-disabled">0</span>' : '—';
         html += `
             <div class="opening-stats-row">
                 <div class="move-cell">${item.moveNumber}</div>
@@ -6525,7 +6540,7 @@ function renderOpeningStatsScreen(useExistingData = false) {
         const hasErrors = item.countBelow75 > 0;
         const errorDisplay = hasErrors
             ? `<span class="move-link" data-color="b" data-move="${item.moveNumber}">${item.countBelow75}</span>`
-            : '—';
+            : item.total > 0 ? '<span class="move-link-disabled">0</span>' : '—';
         html += `
             <div class="opening-stats-row">
                 <div class="move-cell">${item.moveNumber}</div>
@@ -6562,7 +6577,11 @@ function startOpeningErrorPractice(color, moveNum) {
     }
 
     openingErrorPracticeActive = true;
-    openingErrorCurrentPositions = [...stat.errorPositions];
+    openingErrorCurrentPositions = stat.errorPositions.map(position => ({
+        ...position,
+        colorKey: stat.colorKey,
+        moveNumber: stat.moveNumber
+    }));
     console.log('[StartPractice] Posicions inicials:', openingErrorCurrentPositions.length);
     openingErrorColorFilter = color;
     openingErrorMoveFilter = moveNum;
@@ -6586,6 +6605,12 @@ function loadRandomOpeningError() {
     openingErrorCurrentFen = error.fen;
     openingErrorBestMove = error.bestMove;
     openingPracticeBestMove = error.bestMove; // Per a la pista
+    if (error.colorKey) {
+        openingErrorColorFilter = error.colorKey;
+    }
+    if (error.moveNumber) {
+        openingErrorMoveFilter = error.moveNumber;
+    }
     openingErrorMovesRemaining = 2; // Reset a 2 jugades
 
     // Inicialitzar el tauler d'obertures amb la posició
@@ -6727,7 +6752,7 @@ function showOpeningErrorSuccessOverlay(noMore) {
         return;
     }
 
-    const remaining = openingErrorCurrentPositions.length;
+    const remaining = collectAllOpeningErrorPositions().length;
     const showAgainBtn = remaining > 0 && !noMore;
     console.log('[Overlay] remaining:', remaining, 'noMore:', noMore, 'showBtn:', showAgainBtn);
 
@@ -6759,6 +6784,7 @@ function showOpeningErrorSuccessOverlay(noMore) {
     if (btnAgain) {
         btnAgain.onclick = function() {
             overlay.hide();
+            openingErrorCurrentPositions = collectAllOpeningErrorPositions();
             if (openingErrorCurrentPositions.length > 0) {
                 $('.opening-section').first().hide();
                 $('.opening-section').last().show();
