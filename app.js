@@ -7781,22 +7781,59 @@ function endMatchErrorReviewSession() {
     isMatchErrorReviewSession = false;
     matchErrorQueue = [];
     currentMatchError = null;
+    $('#match-error-success-overlay').hide();
     returnToMainMenuImmediate();
+}
+
+function showMatchErrorReviewOverlay(remaining, noMore) {
+    const overlay = $('#match-error-success-overlay');
+    if (!overlay.length) {
+        if (remaining > 0) {
+            const wantsMore = confirm(`Vols revisar un altre error? En queden ${remaining}.`);
+            if (wantsMore) {
+                launchNextMatchError();
+            } else {
+                endMatchErrorReviewSession();
+            }
+        } else {
+            alert('Ja has revisat tots els errors de la partida.');
+            endMatchErrorReviewSession();
+        }
+        return;
+    }
+
+    $('#match-error-remaining').text(
+        noMore ? 'Has revisat tots els errors!' :
+        remaining > 0 ? `${remaining} error${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''}` :
+        'No en queden més!'
+    );
+
+    const btnAgain = document.getElementById('btn-match-error-again');
+    if (btnAgain) {
+        btnAgain.style.display = remaining > 0 && !noMore ? 'inline-block' : 'none';
+    }
+
+    overlay.css('display', 'flex');
+
+    const btnHome = document.getElementById('btn-match-error-home');
+    if (btnHome) {
+        btnHome.onclick = function() {
+            overlay.hide();
+            endMatchErrorReviewSession();
+        };
+    }
+
+    if (btnAgain) {
+        btnAgain.onclick = function() {
+            overlay.hide();
+            launchNextMatchError();
+        };
+    }
 }
 
 function promptMatchErrorNext() {
     const remaining = matchErrorQueue.length;
-    if (remaining > 0) {
-        const wantsMore = confirm(`Vols revisar un altre error? En queden ${remaining}.`);
-        if (wantsMore) {
-            launchNextMatchError();
-        } else {
-            endMatchErrorReviewSession();
-        }
-    } else {
-        alert('Ja has revisat tots els errors de la partida.');
-        endMatchErrorReviewSession();
-    }
+    showMatchErrorReviewOverlay(remaining, remaining === 0);
 }
 
 async function startGame(isBundle, fen = null) {  // ← AFEGIR async
@@ -7817,6 +7854,7 @@ async function startGame(isBundle, fen = null) {  // ← AFEGIR async
     applyControlMode(loadControlMode(), { save: false, rebuild: false });
     $('#bundle-success-overlay').hide();
     $('#bundle-category-success-overlay').hide(); 
+    $('#match-error-success-overlay').hide();
     if (!isBundle) isRandomBundleSession = false;
     
     $('#start-screen').hide();
